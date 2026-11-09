@@ -1,0 +1,19 @@
+router-type: structured
+routers:
+  - id: mcphub
+    kind: page
+    title: { zh-CN: 服务管理, en: Server Management }
+    icon: lucide:plug
+    order: 230
+    iframe-src: /app/com.ictrek.mcphub/
+    keep-alive: true
+    entry-point: true
+    embed: true
+  - id: mcphub-guide
+    kind: page
+    title: { zh-CN: API 集成指南, en: API Integration Guide }
+    icon: lucide:book-open
+    order: 240
+    iframe-src: /app/com.ictrek.mcphub/integration-guide
+    keep-alive: true
+    embed: true

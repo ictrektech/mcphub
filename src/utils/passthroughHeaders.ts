@@ -1,3 +1,4 @@
+// VOS adaptation: platform authentication credentials are never upstream headers.
 import { isHostedModeEnabled } from '../services/hostedMode.js';
 import { resolveBearerAuthHeaderName, resolveForwardAuthTokenHeaderName } from './bearerAuth.js';
 import { getCachedSystemConfig } from './systemConfigCache.js';
@@ -7,6 +8,7 @@ const sensitiveHeaders = new Set([
   'proxy-authorization',
   'cookie',
   'x-auth-token',
+  'x-vos-token',
   'x-api-key',
 ]);
 
@@ -19,6 +21,7 @@ export const isSafePassthroughHeader = (name: string): boolean => {
   // An opt-in must never forward the headers used for MCPHub authentication.
   return (
     Boolean(normalized) &&
+    !(process.env.VOS_AUTH_ENABLED === 'true' && normalized === 'authorization') &&
     (!sensitiveHeaders.has(normalized) || (normalized === 'authorization' && allowAuthorization)) &&
     normalized !== resolveBearerAuthHeaderName(systemConfig).toLowerCase() &&
     normalized !== resolveForwardAuthTokenHeaderName(systemConfig)?.toLowerCase()

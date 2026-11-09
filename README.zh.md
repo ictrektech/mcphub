@@ -1,5 +1,7 @@
 # MCPHub
 
+> VOS 适配：账户认证、运行边界和发布说明见 [ictrek.app/README.md](ictrek.app/README.md)。
+
 > 开源、自托管的 MCP 网关与控制平面，用于连接、控制和运行 MCP 服务器。
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)

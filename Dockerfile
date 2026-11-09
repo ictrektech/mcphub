@@ -70,3 +70,18 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # image runs as a non-root user, breaking startup in egress-restricted
 # environments (#1105).
 CMD ["node", "dist/index.js"]
+
+# VOS adaptation: explicit non-privileged target; no Docker daemon or host socket.
+FROM base AS vos
+RUN test "$INSTALL_EXT" != "true" \
+  && apt-get update && apt-get install -y --no-install-recommends gosu \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid 10001 mcphub \
+  && useradd --uid 10001 --gid 10001 --no-create-home mcphub
+COPY docker/vos-entrypoint.sh /usr/local/bin/vos-entrypoint.sh
+RUN chmod 755 /usr/local/bin/vos-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/vos-entrypoint.sh"]
+CMD ["node", "dist/index.js"]
+
+# Preserve upstream defaults; VOS builds explicitly select the vos target.
+FROM base AS standalone

@@ -1,0 +1,82 @@
+# VOS adaptation: dashboard and local stdio runners share one application container.
+x-mcphub-env: &mcphub-env
+  NODE_ENV: production
+  BASE_PATH: /app/com.ictrek.mcphub
+  VOS_AUTH_ENABLED: 'true'
+  VOS_USERINFO_URL: http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo
+  USE_DB: 'false'
+  MCPHUB_SETTING_PATH: /app/data/mcp_settings.json
+
+x-mcphub-base: &mcphub-base
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 30s
+  security_opt: ['no-new-privileges:true']
+  environment: *mcphub-env
+  volumes:
+    - ${VOS_APP_STORAGE_PATH}/data:/app/data
+  networks:
+    vos_default:
+      aliases: [mcphub]
+  labels:
+    traefik.enable: 'true'
+    traefik.docker.network: vos_default
+    traefik.http.routers.mcphub.rule: PathPrefix(`/app/com.ictrek.mcphub`)
+    traefik.http.services.mcphub.loadbalancer.server.port: '3000'
+    traefik.http.routers.mcphub-top-open.rule: PathPrefix(`/app/com.ictrek.mcphub`) && HeadersRegexp(`Sec-Fetch-Dest`, `document`)
+    traefik.http.routers.mcphub-top-open.priority: '1000'
+    traefik.http.routers.mcphub-top-open.service: mcphub
+    traefik.http.routers.mcphub-top-open.middlewares: mcphub-top-open-redirect
+    traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.regex: '^(https?://[^/]+)/app/com\.ictrek\.mcphub/?(?:\?.*)?$'
+    traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.replacement: '$${1}/#/app/com.ictrek.mcphub/mcphub'
+    traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.permanent: 'false'
+  healthcheck:
+    test:
+      [
+        'CMD',
+        'node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+      ]
+    interval: 30s
+    timeout: 10s
+    start_period: 60s
+    retries: 3
+
+x-mcphub-gpu: &mcphub-gpu
+  <<: *mcphub-base
+  runtime: nvidia
+  environment:
+    <<: *mcphub-env
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+services:
+  mcphub-amd-without-cuda:
+    <<: *mcphub-base
+    profiles: ['amd-without-cuda']
+    image: ${MCPHUB_AMD_WITHOUT_CUDA_IMAGE}
+  mcphub-arm-without-cuda:
+    <<: *mcphub-base
+    profiles: ['arm-without-cuda']
+    image: ${MCPHUB_ARM_WITHOUT_CUDA_IMAGE}
+  mcphub-amd:
+    <<: *mcphub-gpu
+    profiles: ['amd']
+    image: ${MCPHUB_AMD_IMAGE}
+  mcphub-arm:
+    <<: *mcphub-gpu
+    profiles: ['arm']
+    image: ${MCPHUB_ARM_IMAGE}
+  mcphub-l4t:
+    <<: *mcphub-gpu
+    profiles: ['l4t']
+    image: ${MCPHUB_L4T_IMAGE}
+  mcphub-thor-spark:
+    <<: *mcphub-gpu
+    profiles: ['thor-spark']
+    image: ${MCPHUB_THOR_SPARK_IMAGE}
+
+networks:
+  vos_default:
+    external: true

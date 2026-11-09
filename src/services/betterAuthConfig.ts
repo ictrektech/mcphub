@@ -1,3 +1,4 @@
+// VOS adaptation: the platform exchange endpoint validates its own bearer token.
 import { loadSettings } from '../config/index.js';
 import { getSystemConfigDao } from '../dao/DaoFactory.js';
 import { BetterAuthConfig, BetterAuthOidcProviderConfig, SystemConfig } from '../types/index.js';
@@ -282,6 +283,7 @@ export const isApiAuthExemptPath = (
     ? betterAuthConfig.basePath.replace(/^\/api/, '') || '/'
     : null;
   return (
+    reqPath === '/auth/vos' ||
     reqPath === '/auth/login' ||
     reqPath === '/auth/register' ||
     (betterAuthApiPath !== null && reqPath.startsWith(betterAuthApiPath)) ||

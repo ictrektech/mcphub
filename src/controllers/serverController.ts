@@ -1,3 +1,5 @@
+// VOS adaptation: shared endpoints always require authentication.
+import { isVosAuthEnabled } from '../services/vosAuthService.js';
 import { validateToolPolicies } from '../utils/toolPolicy.js';
 import { hasPersonalAuthentication } from '../utils/credentialTemplate.js';
 import { matchesNamePattern } from '../utils/namePattern.js';
@@ -2156,6 +2158,10 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
     }
     const { smartRouting } = migrateLegacySmartRoutingConfig(requestSmartRouting);
 
+    if (isVosAuthEnabled() && (routing?.skipAuth === true || routing?.enableBearerAuth === false)) {
+      res.status(400).json({ success: false, message: (req as Request & { t?: (key: string) => string }).t?.('vos.authenticationRequired') ?? 'VOS requires dashboard and MCP authentication' });
+      return;
+    }
     const hasRoutingUpdate =
       routing &&
       (typeof routing.enableGlobalRoute === 'boolean' ||

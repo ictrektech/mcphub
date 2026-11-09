@@ -1,3 +1,5 @@
+// VOS adaptation: local password sign-in is unavailable in platform mode.
+import { isVosAuthEnabled } from '../services/vosAuthService.js';
 import { getUserSessionVersion } from '../utils/userSession.js';
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -24,6 +26,10 @@ const TOKEN_EXPIRY = '24h';
 
 // Login user
 export const login = async (req: Request, res: Response): Promise<void> => {
+  if (isVosAuthEnabled()) {
+    res.status(403).json({ success: false, message: (req as Request & { t?: (key: string) => string }).t?.('vos.useVosSignIn') ?? 'Use VOS sign-in' });
+    return;
+  }
   // Get translation function from request
   const t = (req as any).t;
 
@@ -107,6 +113,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 // Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
+  if (isVosAuthEnabled()) {
+    res.status(403).json({ success: false, message: (req as Request & { t?: (key: string) => string }).t?.('vos.useVosSignIn') ?? 'Use VOS sign-in' });
+    return;
+  }
   // Get translation function from request
   const t = (req as any).t;
 

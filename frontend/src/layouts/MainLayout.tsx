@@ -1,3 +1,5 @@
+// VOS adaptation: localize the lazy-page loading state.
+import { useTranslation } from 'react-i18next';
 import React, { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from '@/components/layout/Header';
@@ -5,14 +7,15 @@ import Sidebar from '@/components/layout/Sidebar';
 import Content from '@/components/layout/Content';
 import { EmbeddingSyncProvider } from '@/contexts/EmbeddingSyncContext';
 
-const PageFallback: React.FC = () => (
-  <div
+const PageFallback: React.FC = () => {
+  const { t } = useTranslation();
+  return <div
     className="flex h-full min-h-[240px] items-center justify-center text-sm"
     style={{ color: 'var(--hub-ink-3)' }}
   >
-    Loading...
-  </div>
-);
+    {t('app.loading')}
+  </div>;
+};
 
 const MainLayout: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);

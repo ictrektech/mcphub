@@ -1,0 +1,91 @@
+name: VOS MCPHub Pull Package Release
+on:
+  push:
+    tags: ['vos-mcphub-v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Resolve version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#vos-mcphub-v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$(tr -d '[:space:]' < ictrek.app/VERSION)" == "$VERSION" ]]
+          echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "MCPHUB_PACKAGE_DIR=$HOME/dev/build/mcphub/ictrek.app" >> "$GITHUB_ENV"
+      - name: Write Feishu credentials
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          path = pathlib.Path.home() / '.feishu.components.json'
+          path.touch(mode=0o600)
+          path.write_text(json.dumps({'feishu_app_id': os.environ['FEISHU_APP_ID'], 'feishu_app_secret': os.environ['FEISHU_APP_SECRET']}))
+          PY
+      - name: Verify and build pull package from published image records
+        run: |
+          mkdir -p "$HOME/dev/build/mcphub/tmp"
+          export TMPDIR="$HOME/dev/build/mcphub/tmp" PYTHONDONTWRITEBYTECODE=1
+          python3 -m pip install --cache-dir "$HOME/dev/build/mcphub/pip" pyyaml
+          python3 -m unittest discover -s ictrek.app/scripts -p 'test_vos_package.py'
+          bash ictrek.app/scripts/package.sh
+      - name: Create release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PREVIOUS="$(gh release list --limit 100 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[0].tagName // ""')"
+          {
+            echo 'VOS MCPHub pull package. Service images are recorded in the canonical Feishu spreadsheet.'
+            echo
+            if [[ -n "$PREVIOUS" ]]; then
+              echo "Changes since ${PREVIOUS}:"
+              git log --no-merges --pretty='- %s (%h)' "${PREVIOUS}..HEAD"
+            else
+              echo 'Initial VOS package release.'
+            fi
+          } > "$HOME/dev/build/mcphub/release-notes.md"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git tag "v${PACKAGE_VERSION}" "$GITHUB_SHA"
+          git push origin "v${PACKAGE_VERSION}"
+          gh release create "v${PACKAGE_VERSION}" "$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" \
+            --verify-tag --latest --title "v${PACKAGE_VERSION}" --notes-file "$HOME/dev/build/mcphub/release-notes.md"
+      - name: Open approved App Store tunnel
+        env:
+          APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+        run: bash ictrek.app/scripts/appstore_tunnel.sh open
+      - name: Publish VOS App Store package
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 300 \
+            -F "package=@$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" -F force=true \
+            http://127.0.0.1:18899/api/appstore/apps > "$HOME/dev/build/mcphub/publish-result.json"
+          python3 - <<'PY'
+          import json, pathlib
+          response = json.loads((pathlib.Path.home() / 'dev/build/mcphub/publish-result.json').read_text())
+          if response.get('code') != 0:
+              raise SystemExit('VOS App Store publication rejected')
+          print('VOS App Store publication confirmed')
+          PY
+      - name: Close App Store tunnel
+        if: always()
+        env:
+          APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
+        run: bash ictrek.app/scripts/appstore_tunnel.sh close
+      - name: Remove temporary Feishu credentials
+        if: always()
+        run: rm -f "$HOME/.feishu.components.json"

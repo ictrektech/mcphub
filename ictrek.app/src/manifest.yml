@@ -1,0 +1,150 @@
+id: com.ictrek.mcphub
+name:
+  zh-CN: MCPHub
+  en: MCPHub
+description:
+  zh-CN: MCP 服务管理与统一接入，支持 VOS 自动登录、私有服务和受控共享。
+  en: MCP server management and gateway with VOS sign-in, private servers and controlled
+    sharing.
+version: __APP_VERSION__
+author: ictrek
+category:
+  - ai
+icon: icon.png
+arch:
+  - amd64
+  - arm64
+oauth2:
+  client:
+    id: com.ictrek.mcphub
+    client_type: public
+    grant_types:
+      - authorization_code
+      - refresh_token
+    response_types:
+      - code
+    scopes:
+      - openid
+      - profile
+      - email
+    pkce_required: true
+    token_endpoint_auth_method: none
+require-profiles: true
+profiles:
+  - name: amd-without-cuda
+    title:
+      zh-CN: AMD64 CPU（推荐）
+      en: amd-without-cuda
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: amd64
+    conflicts:
+      - arm-without-cuda
+      - amd
+      - arm
+      - l4t
+      - thor-spark
+  - name: arm-without-cuda
+    title:
+      zh-CN: ARM64 CPU（推荐，含 Jetson/Thor）
+      en: arm-without-cuda
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: arm64
+    conflicts:
+      - amd-without-cuda
+      - amd
+      - arm
+      - l4t
+      - thor-spark
+  - name: amd
+    title:
+      zh-CN: AMD64 NVIDIA（可选）
+      en: amd
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: amd64
+      software:
+        - cuda
+    conflicts:
+      - amd-without-cuda
+      - arm-without-cuda
+      - arm
+      - l4t
+      - thor-spark
+  - name: arm
+    title:
+      zh-CN: ARM64 NVIDIA（可选）
+      en: arm
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: arm64
+      software:
+        - cuda
+      device-type: generic
+    conflicts:
+      - amd-without-cuda
+      - arm-without-cuda
+      - amd
+      - l4t
+      - thor-spark
+  - name: l4t
+    title:
+      zh-CN: Jetson / L4T NVIDIA（可选）
+      en: l4t
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: arm64
+      software:
+        - cuda
+      device-type:
+        - any-of:
+            - l4t
+            - jetson
+    conflicts:
+      - amd-without-cuda
+      - arm-without-cuda
+      - amd
+      - arm
+      - thor-spark
+  - name: thor-spark
+    title:
+      zh-CN: Thor / Spark NVIDIA（可选）
+      en: thor-spark
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: arm64
+      software:
+        - cuda
+      device-type:
+        - any-of:
+            - thor-spark
+            - thor
+    conflicts:
+      - amd-without-cuda
+      - arm-without-cuda
+      - amd
+      - arm
+      - l4t
+storage:
+  directories:
+    - path: data
+      mode: '0700'

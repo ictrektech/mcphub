@@ -1,3 +1,6 @@
+import { vosDiscovery, vosWhoami } from '../controllers/vosIntegrationController.js';
+// VOS adaptation: platform sign-in endpoint.
+import { vosLogin } from '../controllers/vosAuthController.js';
 import { listMyOAuthApprovals, revokeMyOAuthApproval } from '../controllers/oauthApprovalController.js';
 import { handleOAuthRelay } from '../controllers/oauthRelayController.js';
 import { metrics } from '../controllers/metricsController.js';
@@ -302,6 +305,8 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.delete('/credentials/:name', updateMyCredential);
   authenticatedRouter.get('/oauth/approvals', listMyOAuthApprovals);
   authenticatedRouter.delete('/oauth/approvals/:approvalId', revokeMyOAuthApproval);
+  authenticatedRouter.get('/integration/whoami', vosWhoami);
+  authenticatedRouter.get('/integration/discovery', vosDiscovery);
   authenticatedRouter.get('/servers', getAllServers);
   authenticatedRouter.get('/servers/:name/share-candidates', getServerShareCandidates);
   authenticatedRouter.get('/servers/:name', getServerConfig);
@@ -500,6 +505,8 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   // Better Auth user route requires authentication and shares the authenticated route limiter
   authenticatedRouter.get('/better-auth/user', getBetterAuthUser);
 
+  router.post('/auth/vos', authAttemptRateLimiter, vosLogin);
+
   router.post(
     '/auth/login',
     [
@@ -560,18 +567,19 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   app.get(`${config.basePath}/api/openapi/servers`, getOpenAPIServers);
   app.get(`${config.basePath}/api/openapi/stats`, getOpenAPIStats);
 
-  // OpenAPI-compatible tool execution endpoints
-  app.get(`${config.basePath}/api/tools/:serverName/:toolName`, executeToolViaOpenAPI);
-  app.post(`${config.basePath}/api/tools/:serverName/:toolName`, executeToolViaOpenAPI);
-  app.get(`${config.basePath}/api/:name/tools/:serverName/:toolName`, executeToolViaOpenAPI);
-  app.post(`${config.basePath}/api/:name/tools/:serverName/:toolName`, executeToolViaOpenAPI);
-
   // Mounted last so the public routes registered on `router` above are matched
   // before the shared authenticated-route rate limiter runs. See the comment on
   // `authenticatedRouter.use(authenticatedRouteRateLimiter)`.
   router.use(authenticatedRouter);
 
   app.use(`${config.basePath}/api`, router);
+
+  // VOS validation exposed an upstream collision: /tools/call/:server must
+  // reach the dashboard controller before these generic OpenAPI patterns.
+  app.get(`${config.basePath}/api/tools/:serverName/:toolName`, executeToolViaOpenAPI);
+  app.post(`${config.basePath}/api/tools/:serverName/:toolName`, executeToolViaOpenAPI);
+  app.get(`${config.basePath}/api/:name/tools/:serverName/:toolName`, executeToolViaOpenAPI);
+  app.post(`${config.basePath}/api/:name/tools/:serverName/:toolName`, executeToolViaOpenAPI);
 };
 
 export default router;

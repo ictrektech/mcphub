@@ -1,3 +1,5 @@
+// VOS adaptation: integration documentation is a peer page, outside the management layout.
+import { useTranslation } from 'react-i18next';
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
@@ -10,6 +12,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import EmbeddingSyncAlertListener from './components/EmbeddingSyncAlertListener';
 import { getBasePath } from './utils/runtime';
 
+const IntegrationGuidePage = lazy(() => import('./pages/IntegrationGuidePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const OAuthConsentPage = lazy(() => import('./pages/OAuthConsentPage'));
 const DashboardPage = lazy(() => import('./pages/Dashboard'));
@@ -31,11 +34,12 @@ const CloudRedirect: React.FC = () => {
   return <Navigate to={`/market/${serverName}`} replace />;
 };
 
-const RouteFallback: React.FC = () => (
-  <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
-    Loading...
-  </div>
-);
+const RouteFallback: React.FC = () => {
+  const { t } = useTranslation();
+  return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+    {t('app.loading')}
+  </div>;
+};
 
 function App() {
   const basename = getBasePath();
@@ -71,6 +75,7 @@ function App() {
 
                   {/* 受保护的路由，使用 MainLayout 作为布局容器 */}
                   <Route element={<ProtectedRoute />}>
+                    <Route path="/integration-guide" element={<Suspense fallback={<RouteFallback />}><IntegrationGuidePage /></Suspense>} />
                     <Route element={<MainLayout />}>
                       <Route path="/" element={<DashboardPage />} />
                       <Route path="/oauth-applications" element={<OAuthApprovalsPage />} />

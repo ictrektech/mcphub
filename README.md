@@ -1,5 +1,7 @@
 # MCPHub
 
+> VOS fork: account integration, execution boundaries and release instructions are documented in [ictrek.app/README.md](ictrek.app/README.md).
+
 > An open-source, self-hosted MCP gateway and control plane for connecting, controlling, and operating MCP servers.
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)

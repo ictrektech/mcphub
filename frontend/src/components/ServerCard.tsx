@@ -1,3 +1,5 @@
+// VOS adaptation: copy gateway addresses with the full application path.
+import { getPublicBaseUrl } from '@/utils/runtime';
 import PersonalOAuthControls from './PersonalOAuthControls';
 import { Link } from 'react-router-dom';
 import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from 'react';
@@ -160,7 +162,7 @@ const ServerCard = ({
   const { showToast } = useToast();
   const { exportMCPSettings, installConfig } = useSettingsData();
   const { auth } = useAuth();
-  const baseUrl = installConfig?.baseUrl?.replace(/\/+$/, '') || '';
+  const baseUrl = getPublicBaseUrl(installConfig?.baseUrl);
 
   const [expanded, setExpanded] = useState(false);
   const [expandedTab, setExpandedTab] = useState<'tools' | 'prompts' | 'resources' | 'cost' | null>(

@@ -1,3 +1,7 @@
+// VOS adaptation: platform tokens are sent only to this app's API.
+import { clearVosSession, getVosSession, isVosMode } from '../services/vosAuthService';
+import i18n from '../i18n';
+import { getApiBaseUrl } from './runtime';
 import { addInterceptor, removeInterceptor, type FetchInterceptor } from './fetchInterceptor';
 
 // Token key in localStorage
@@ -22,10 +26,16 @@ export const removeToken = (): void => {
 export const authInterceptor: FetchInterceptor = {
   request: async (url: string, config: RequestInit) => {
     const headers = new Headers(config.headers);
-    const language = localStorage.getItem('i18nextLng') || 'en';
+    const language = i18n.resolvedLanguage || i18n.language || 'en';
     headers.set('Accept-Language', language);
 
-    const token = getToken();
+    const target = new URL(url, window.location.origin);
+    const isAppApi = target.origin === window.location.origin && target.pathname.startsWith(`${getApiBaseUrl()}/`);
+    if (isVosMode() && isAppApi && !target.pathname.endsWith('/auth/vos')) {
+      const session = await getVosSession();
+      if (session) headers.set('x-vos-token', session.token.access_token);
+    }
+    const token = isVosMode() ? null : getToken();
     if (token) {
       headers.set('x-auth-token', token);
     }
@@ -45,6 +55,7 @@ export const authInterceptor: FetchInterceptor = {
     if (response.status === 401) {
       // Token might be expired or invalid, remove it
       removeToken();
+      if (isVosMode()) clearVosSession();
 
       // You could also trigger a redirect to login page here
       // window.location.href = '/login';

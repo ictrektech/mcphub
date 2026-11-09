@@ -1,3 +1,4 @@
+// VOS adaptation: complete bilingual labels for the server configuration form.
 import UserGroupSelection from './UserGroupSelection';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -626,7 +627,7 @@ const ServerForm = ({
     <div className="hub-card p-6 w-full max-w-3xl max-h-screen overflow-y-auto">
       <div className="flex justify-between items-center mb-5">
         <h2 className="text-lg font-semibold text-[var(--hub-ink)]">{modalTitle}</h2>
-        <button onClick={onCancel} className="hub-icon-btn" aria-label="Close">
+        <button onClick={onCancel} className="hub-icon-btn" aria-label={t('common.close')}>
           <X size={16} />
         </button>
       </div>
@@ -659,7 +660,7 @@ const ServerForm = ({
                 value={formData.name}
                 onChange={handleInputChange}
                 className="w-full py-2 px-3 form-input"
-                placeholder="e.g.: time-mcp"
+                placeholder={t('server.namePlaceholder')}
                 pattern={enforceNamePattern ? SERVER_NAME_PATTERN.source : undefined}
                 maxLength={enforceNamePattern ? SERVER_NAME_MAX_LENGTH : undefined}
                 title={t('server.nameInvalid')}
@@ -2281,7 +2282,7 @@ const ServerForm = ({
                             value={formData.oauth?.clientId || ''}
                             onChange={(e) => handleOAuthChange('clientId', e.target.value)}
                             className="w-full py-2 px-3 form-input"
-                            placeholder="client id"
+                            placeholder={t('server.oauth.clientId')}
                             autoComplete="off"
                           />
                         </div>
@@ -2294,7 +2295,7 @@ const ServerForm = ({
                             value={formData.oauth?.clientSecret || ''}
                             onChange={(e) => handleOAuthChange('clientSecret', e.target.value)}
                             className="w-full py-2 px-3 form-input"
-                            placeholder="client secret"
+                            placeholder={t('server.oauth.clientSecret')}
                             autoComplete="off"
                           />
                         </div>
@@ -2392,7 +2393,7 @@ const ServerForm = ({
                               )
                             }
                             className="w-full py-2 px-3 form-input"
-                            placeholder="Optional"
+                            placeholder={t('common.optional')}
                             min="1000"
                           />
                           <p className="text-xs text-gray-500 mt-1">

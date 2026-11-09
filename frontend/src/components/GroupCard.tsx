@@ -1,3 +1,5 @@
+// VOS adaptation: copy gateway addresses with the full application path.
+import { getPublicBaseUrl } from '@/utils/runtime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +49,7 @@ const GroupCard = ({ group, servers, onEdit, onDelete, cost }: GroupCardProps) =
   const canManage = !!auth.user && (auth.user.isAdmin || auth.user.username === group.owner);
   const { showToast } = useToast();
   const { installConfig, nameSeparator } = useSettingsData();
-  const baseUrl = installConfig?.baseUrl?.replace(/\/+$/, '') || '';
+  const baseUrl = getPublicBaseUrl(installConfig?.baseUrl);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [clientConfigTarget, setClientConfigTarget] = useState<ClientSnippetTarget | null>(null);

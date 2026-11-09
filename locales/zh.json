@@ -109,7 +109,8 @@
     "passwordRequireLetter": "密码必须包含至少一个字母",
     "passwordRequireNumber": "密码必须包含至少一个数字",
     "passwordRequireSpecial": "密码必须包含至少一个特殊字符",
-    "passwordStrengthHint": "密码必须至少 8 个字符，且包含字母、数字和特殊字符"
+    "passwordStrengthHint": "密码必须至少 8 个字符，且包含字母、数字和特殊字符",
+    "user": "用户"
   },
   "server": {
     "protocolVersion": "MCP 协议",
@@ -316,7 +317,10 @@
       "relayOriginsInvalid": "请输入 1–16 个 HTTPS origin，不含路径或末尾斜杠。",
       "relayMetadataInvalid": "请输入有效的 broker 元数据 JSON，包含 issuer、authorization_endpoint、token_endpoint 和非空 response_types_supported。端点须为 HTTP(S)，issuer 和授权端点不得含查询参数。",
       "relayRequiresAdmin": "仅管理员可配置 OAuth 授权中继。"
-    }
+    },
+    "sectionBasicInfo": "基本信息",
+    "sectionConnection": "连接配置",
+    "sectionAdvanced": "高级选项"
   },
   "status": {
     "sleeping": "休眠",
@@ -343,7 +347,14 @@
     "failedToUpdateSystemConfig": "更新系统配置失败",
     "failedToUpdateRouteConfig": "更新路由配置失败",
     "failedToUpdateSmartRoutingConfig": "更新智能路由配置失败",
-    "failedToUpdateBetterAuthConfig": "更新 Better Auth 配置失败"
+    "failedToUpdateBetterAuthConfig": "更新 Better Auth 配置失败",
+    "failedToUpdateInstallConfig": "更新安装设置失败",
+    "failedToUpdateMCPRouterConfig": "更新 MCP 路由设置失败",
+    "failedToUpdateNameSeparator": "更新名称分隔符失败",
+    "failedToUpdateOAuthServerConfig": "更新 OAuth 服务设置失败",
+    "failedToUpdateRoutingConfig": "更新路由设置失败",
+    "failedToUpdateSessionRebuild": "更新会话恢复设置失败",
+    "failedToUpdateSettings": "更新设置失败"
   },
   "common": {
     "processing": "处理中...",
@@ -395,7 +406,9 @@
     "inactive": "未激活",
     "viewAll": "查看全部",
     "docs": "文档",
-    "all": "全部"
+    "all": "全部",
+    "loading": "加载中…",
+    "optional": "可选"
   },
   "clientConfig": {
     "title": "复制 MCP 配置",
@@ -1174,7 +1187,9 @@
       "confirmClear": "删除全部策略？访问将恢复为现有权限控制。",
       "deleteRule": "删除规则 {{number}}",
       "retry": "重试"
-    }
+    },
+    "selectAtLeastOneExcludedGroupOrServer": "请至少选择一个要排除的分组或服务器",
+    "selectAtLeastOneGroupOrServer": "请至少选择一个分组或服务器"
   },
   "mcpb": {
     "upload": "上传",
@@ -1276,7 +1291,8 @@
     "statsError": "获取用户统计失败",
     "deleteConfirmation": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。",
     "confirmDelete": "删除用户",
-    "deleteWarning": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。"
+    "deleteWarning": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。",
+    "fetchError": "加载用户失败"
   },
   "api": {
     "errors": {
@@ -1320,7 +1336,8 @@
       "failedToGetMarketTags": "获取市场标签失败",
       "failedToSearchMarketServers": "搜索市场服务器失败",
       "failedToFilterMarketServers": "过滤市场服务器失败",
-      "failedToProcessMcpbFile": "处理 MCPB 文件失败"
+      "failedToProcessMcpbFile": "处理 MCPB 文件失败",
+      "failedToReloadServer": "重新加载服务器失败"
     },
     "success": {
       "serverCreated": "服务器创建成功",
@@ -1599,5 +1616,43 @@
     "lifetime": "授权记忆有效期（秒）",
     "lifetimeDescription": "从明确授权时起固定计算：1–31536000 秒（默认 1209600，即 14 天）。刷新令牌不会延长期限。",
     "invalidLifetime": "请输入 1–31536000 之间的整数秒数。"
+  },
+  "vos": {
+    "signInRequired": "请从 VOS 打开 MCPHub，自动使用平台账户登录。如果登录失败，请检查 VOS 登录状态后重试。",
+    "retry": "重新登录",
+    "followLanguage": "跟随 VOS 语言",
+    "signInFailed": "VOS 登录失败，请检查平台登录状态后重试。",
+    "useVosSignIn": "请使用 VOS 平台账户登录。",
+    "authenticationRequired": "VOS 模式下，管理界面和 MCP 接口必须启用认证。",
+    "compressionAuto": "自动",
+    "compressionLog": "日志",
+    "compressionSearch": "搜索结果",
+    "compressionDiff": "差异",
+    "compressionText": "文本"
+  },
+  "guide": {
+    "title": "API 集成指南",
+    "intro": "VOS 身份认证、鉴权后的 MCP 服务发现，以及其他应用的自动集成方式。",
+    "endpoints": "当前设备接入地址",
+    "identityLabel": "用户身份验证",
+    "discoveryLabel": "发现 MCP 服务",
+    "identityTitle": "1. 区分用户身份与应用身份",
+    "identityText": "用户令牌代表当前 VOS 用户，继承该用户的服务可见范围。应用 context 令牌代表调用方应用，只能使用 public MCP 服务。即使 VOS 为应用令牌返回管理员角色，MCPHub 也不会因此授予管理员权限。服务发现和 MCP 调用均不开放匿名访问。",
+    "userTokenTitle": "2. 获取 VOS 用户 Token",
+    "userTokenText": "在消费方应用的 VOS manifest 中声明自己的 public OIDC client：authorization_code、refresh_token、openid/profile/email，并要求 PKCE。在该应用的 VOS iframe 内执行下面的代码，由平台桥接按平台策略完成授权。必须校验 state，访问和刷新令牌仅保存在内存。不要读取其他应用的浏览器存储，也不要把平台永久应用令牌交给浏览器。",
+    "verifyTitle": "3. 在后端验证用户",
+    "verifyText": "消费方后端将 VOS_USERINFO_URL 设置为 http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo。VOS 返回直接 JSON claims。必须检查 HTTP 状态、sub 和 enable；不能信任未经校验的 JWT，或浏览器传来的用户名、角色。仅允许真实用户的操作，还应调用 MCPHub whoami 并要求 kind=user，禁止把应用凭据当成人类管理员。",
+    "appTokenTitle": "4. 获取消费方应用的 VOS Token",
+    "appTokenText": "VOS 会在每个已安装应用自己的 context 目录创建 access-token 文件。消费方只读挂载自己的 VOS_APP_CONTEXT_PATH，由后端读取 /var/lib/vos-context/access-token。这是受保护的平台凭据，应由具有合法读取权限的后端或启动助手读取，不要改为所有用户可读。禁止记录日志、返回前端或挂载其他应用的 context。消费方还须加入外部网络 vos_default。",
+    "discoveryTitle": "5. 自动发现可用 MCP 服务",
+    "discoveryText": "GET /api/integration/discovery 要求 Authorization: Bearer <VOS_TOKEN>。响应包含 data.mcp_path 和 data.servers；服务条目提供 name、description、visibility、status 和独立 mcp_path。路径相对于本次请求的 origin。只返回已启用且当前身份获授权的服务，不包含命令、上游 URL、环境变量和密钥。应用 context 凭据只能发现 public 服务；认证失败时不得回退为匿名请求。",
+    "automaticTitle": "6. 其他 VOS 应用自动集成",
+    "automaticText": "在 vos_default 网络中通过稳定别名 mcphub:3000 调用发现接口，再用同一个已验证 Token 连接 Streamable HTTP。下面是使用 @modelcontextprotocol/client 的 Node.js 示例。若 MCPHub 是可选依赖且尚未安装，消费方应对 DNS 或连接失败做有限重试，或关闭该集成。访问用户私有服务时，应转发该用户的 Token，而不是使用应用凭据。",
+    "clientsTitle": "7. 外部 MCP 客户端接入",
+    "clientsText": "桌面客户端请在设置中创建用户级 MCPHub Bearer Key，填入下方 HTTP 配置；也可以通过客户端支持的凭据机制提供有效 VOS 用户 Token。用户 Key 继承其所有者权限。不要向普通用户分发管理员系统 Key 或 VOS 应用 context 凭据。停用 VOS 用户时，还应显式撤销其已签发的 MCPHub Key。",
+    "permissionsTitle": "8. 可见性与凭据边界",
+    "permissionsText": "private：所有者和管理员；public：已认证用户及应用；共享：指定用户或本地用户组。共享调用权不会开放配置管理。静态上游凭据仍是共享服务凭据；若上游数据也需按人隔离，应使用个人凭据绑定。应用 context 身份不能使用个人凭据绑定。服务发现不会绕过工具权限。",
+    "operationsTitle": "9. 运行与生命周期",
+    "operationsText": "本地 stdio 命令只允许管理员部署，私有服务不是操作系统沙箱。VOS 镜像不挂载宿主 Docker socket，也不运行 Docker-in-Docker。管理和远程服务请选择 CPU profile；NVIDIA profile 仅开放设备与驱动，不会自动安装兼容的 CUDA 库。VOS 应用抽屉只有“服务管理”和本指南两个同级页面。"
   }
 }

@@ -1,6 +1,7 @@
 // Global runtime configuration interface
 export interface RuntimeConfig {
   basePath: string;
+  vosAuthEnabled?: boolean;
   smartRoutingPath?: string;
   isHosted?: boolean;
   version: string;

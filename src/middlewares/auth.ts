@@ -1,3 +1,5 @@
+// VOS adaptation: verify platform identity before local authentication.
+import { authenticateVosToken, isVosAuthEnabled, type VosPrincipal } from '../services/vosAuthService.js';
 import { resolveJwtUser } from '../utils/userSession.js';
 import { Request, Response, NextFunction } from 'express';
 import defaultConfig from '../config/index.js';
@@ -8,6 +10,8 @@ import { authenticateForwardAuthToken } from '../services/forwardAuthService.js'
 import { bearerKeyMatches } from '../utils/bearerKeyToken.js';
 import { getBearerTokenFromHeaders, getForwardAuthTokenFromHeaders } from '../utils/bearerAuth.js';
 import { logger } from '../utils/logger.js';
+
+const verifiedVosUsers = new WeakMap<Request, VosPrincipal>();
 
 const isTestEnv =
   process.env.NODE_ENV === 'test' ||
@@ -107,6 +111,21 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
   const t = (req as any).t;
   if (!checkReadonly(req)) {
     res.status(403).json({ success: false, message: t('api.errors.readonly') });
+    return;
+  }
+
+  if (isVosAuthEnabled()) {
+    try {
+      const bearer = req.header('authorization');
+      const token = req.header('x-vos-token') ?? (bearer?.startsWith('Bearer ') ? bearer.slice(7) : undefined);
+      const allowApplication = ['/integration/discovery', '/integration/whoami'].includes(req.path);
+      const user = verifiedVosUsers.get(req) ?? await authenticateVosToken(token, { allowApplication });
+      verifiedVosUsers.set(req, user);
+      (req as Request & { user?: unknown }).user = user;
+      next();
+    } catch {
+      res.status(401).json({ success: false, message: (req as Request & { t?: (key: string) => string }).t?.('vos.signInRequired') ?? 'VOS sign-in required' });
+    }
     return;
   }
 

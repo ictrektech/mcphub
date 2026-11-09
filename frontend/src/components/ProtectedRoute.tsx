@@ -1,3 +1,6 @@
+// VOS adaptation: explain platform sign-in instead of showing a local password form.
+import VosSignIn from './VosSignIn';
+import { isVosMode } from '../services/vosAuthService';
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +21,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (!auth.isAuthenticated) {
+    if (isVosMode()) return <VosSignIn />;
     return <Navigate to={redirectPath} replace />;
   }
 

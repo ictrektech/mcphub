@@ -74,3 +74,17 @@ describe('forward-auth token header passthrough policy', () => {
     expect(isSafePassthroughHeader('X-Other')).toBe(true);
   });
 });
+
+it('never forwards VOS dashboard credentials as upstream headers', () => {
+  expect(isSafePassthroughHeader('x-vos-token')).toBe(false);
+});
+
+it('reserves Authorization for VOS identity even with an upstream passthrough opt-in', () => {
+  const previous = process.env.VOS_AUTH_ENABLED;
+  process.env.VOS_AUTH_ENABLED = 'true';
+  try { expect(isSafePassthroughHeader('Authorization')).toBe(false); }
+  finally {
+    if (previous === undefined) delete process.env.VOS_AUTH_ENABLED;
+    else process.env.VOS_AUTH_ENABLED = previous;
+  }
+});

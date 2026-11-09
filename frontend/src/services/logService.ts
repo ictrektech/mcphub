@@ -1,3 +1,5 @@
+// VOS adaptation: stream logs with an authenticated fetch; never put platform tokens in URLs.
+import { getVosSession, isVosMode } from './vosAuthService';
 import { useEffect, useState } from 'react';
 import { apiGet, apiDelete } from '../utils/fetchInterceptor';
 import { getApiUrl } from '../utils/runtime';
@@ -48,6 +50,7 @@ export const clearLogs = async (): Promise<void> => {
  */
 class LogStreamManager {
   private eventSource: EventSource | null = null;
+  private vosStream: AbortController | null = null;
   private subscribers = new Set<(event: MessageEvent) => void>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private openAttempts = 0;
@@ -70,6 +73,7 @@ class LogStreamManager {
 
   private openEventSource() {
     this.closeEventSource();
+    if (isVosMode()) { void this.openVosStream(); return; }
     const token = getToken();
 
     if (!token) {
@@ -123,7 +127,49 @@ class LogStreamManager {
     }
   }
 
+  private async openVosStream() {
+    const controller = new AbortController();
+    this.vosStream = controller;
+    // Revalidate the platform identity periodically even when the SSE connection stays open.
+    const timeout = setTimeout(() => controller.abort(), 240000);
+    try {
+      const session = await getVosSession();
+      if (!session || controller.signal.aborted) return;
+      const response = await fetch(getApiUrl('/logs/stream'), {
+        headers: { 'x-vos-token': session.token.access_token }, signal: controller.signal,
+      });
+      if (!response.ok || !response.body) throw new Error('Log stream unavailable');
+      this.openAttempts = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!controller.signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let separator: RegExpExecArray | null;
+        while ((separator = /\r?\n\r?\n/.exec(buffer))) {
+          const frame = buffer.slice(0, separator.index);
+          buffer = buffer.slice(separator.index + separator[0].length);
+          const data = frame.split(/\r?\n/).filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5).replace(/^ /, '')).join('\n');
+          if (data) this.subscribers.forEach(callback => callback(new MessageEvent('message', { data })));
+        }
+      }
+    } catch { /* Reconnect below without logging credentials or raw fetch errors. */ }
+    finally {
+      clearTimeout(timeout);
+      if (this.vosStream === controller) {
+        this.vosStream = null;
+        if (this.subscribers.size > 0) this.scheduleReconnect();
+      }
+    }
+  }
+
   private closeEventSource() {
+    const stream = this.vosStream;
+    this.vosStream = null;
+    stream?.abort();
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;

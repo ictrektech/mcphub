@@ -1,14 +1,23 @@
+// VOS adaptation: explicit follow-platform, English and Chinese language choices.
+import { isVosMode } from '../../services/vosAuthService';
+import { getVosLanguagePreference, setVosLanguagePreference, type VosLanguagePreference } from '../../services/vosLocaleService';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LanguageIcon from '@/components/icons/LanguageIcon';
 
 const LanguageSwitch: React.FC = () => {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const vosMode = isVosMode();
+  const [vosPreference, setVosPreference] = useState(getVosLanguagePreference);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState(i18n.language);
 
   // Available languages
-  const availableLanguages = [
+  const availableLanguages = vosMode ? [
+    { code: 'auto', label: t('vos.followLanguage') },
+    { code: 'en', label: 'English' },
+    { code: 'zh', label: '中文' },
+  ] : [
     { code: 'en', label: 'English' },
     { code: 'vi', label: 'Tiếng Việt' },
     { code: 'zh', label: '中文' },
@@ -41,6 +50,13 @@ const LanguageSwitch: React.FC = () => {
   }, [languageDropdownOpen]);
 
   const handleLanguageChange = (lang: string) => {
+    if (vosMode) {
+      const preference = lang as VosLanguagePreference;
+      setVosPreference(preference);
+      setLanguageDropdownOpen(false);
+      void setVosLanguagePreference(preference);
+      return;
+    }
     localStorage.setItem('i18nextLng', lang);
     setLanguageDropdownOpen(false);
     window.location.reload();
@@ -56,20 +72,20 @@ const LanguageSwitch: React.FC = () => {
       <button
         onClick={handleLanguageToggle}
         className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 focus:outline-none"
-        aria-label="Language Switcher"
+        aria-label={t('common.language')}
       >
         <LanguageIcon className="h-5 w-5" />
       </button>
 
       {/* Show dropdown when opened */}
       {languageDropdownOpen && (
-        <div className="absolute right-0 mt-2 w-24 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+        <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
           <div>
             {availableLanguages.map((lang) => (
               <button
                 key={lang.code}
                 onClick={() => handleLanguageChange(lang.code)}
-                className={`flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${currentLanguage.startsWith(lang.code)
+                className={`flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${(vosMode ? vosPreference === lang.code : currentLanguage.startsWith(lang.code))
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-100'
                   }`}

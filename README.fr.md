@@ -1,5 +1,7 @@
 # MCPHub
 
+> Adaptation VOS : authentification, limites d’exécution et publication sont documentées dans [ictrek.app/README.md](ictrek.app/README.md).
+
 > Une passerelle et un plan de contrôle MCP open source et auto-hébergés pour connecter, contrôler et exploiter des serveurs MCP.
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)

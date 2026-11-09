@@ -109,7 +109,8 @@
     "passwordRequireLetter": "Le mot de passe doit contenir au moins une lettre",
     "passwordRequireNumber": "Le mot de passe doit contenir au moins un chiffre",
     "passwordRequireSpecial": "Le mot de passe doit contenir au moins un caractère spécial",
-    "passwordStrengthHint": "Le mot de passe doit contenir au moins 8 caractères et inclure des lettres, des chiffres et des caractères spéciaux"
+    "passwordStrengthHint": "Le mot de passe doit contenir au moins 8 caractères et inclure des lettres, des chiffres et des caractères spéciaux",
+    "user": "User"
   },
   "server": {
     "protocolVersion": "Protocole MCP",
@@ -316,7 +317,10 @@
       "relayOriginsInvalid": "Saisissez 1 à 16 origines HTTPS sans chemin ni barre finale.",
       "relayMetadataInvalid": "Saisissez un JSON valide avec issuer, authorization_endpoint, token_endpoint et response_types_supported non vide. Les endpoints doivent être HTTP(S) ; issuer et le endpoint d’autorisation ne doivent pas contenir de requête.",
       "relayRequiresAdmin": "Seuls les administrateurs peuvent configurer le relais OAuth."
-    }
+    },
+    "sectionBasicInfo": "Basic Info",
+    "sectionConnection": "Connection",
+    "sectionAdvanced": "Advanced Options"
   },
   "status": {
     "sleeping": "En veille",
@@ -342,7 +346,15 @@
     "failedToFetchSettings": "Échec de la récupération des paramètres",
     "failedToUpdateRouteConfig": "Échec de la mise à jour de la configuration de routage",
     "failedToUpdateSmartRoutingConfig": "Échec de la mise à jour de la configuration du routage intelligent",
-    "failedToUpdateBetterAuthConfig": "Échec de la mise à jour de la configuration Better Auth"
+    "failedToUpdateBetterAuthConfig": "Échec de la mise à jour de la configuration Better Auth",
+    "failedToUpdateInstallConfig": "Failed to update installation settings",
+    "failedToUpdateMCPRouterConfig": "Failed to update MCP routing settings",
+    "failedToUpdateNameSeparator": "Failed to update the name separator",
+    "failedToUpdateOAuthServerConfig": "Failed to update OAuth server settings",
+    "failedToUpdateRoutingConfig": "Failed to update routing settings",
+    "failedToUpdateSessionRebuild": "Failed to update session recovery settings",
+    "failedToUpdateSettings": "Failed to update settings",
+    "failedToUpdateSystemConfig": "Failed to update system settings"
   },
   "common": {
     "processing": "En cours de traitement...",
@@ -394,7 +406,9 @@
     "inactive": "Inactif",
     "viewAll": "Voir tout",
     "docs": "Docs",
-    "all": "Tout"
+    "all": "Tout",
+    "loading": "Loading…",
+    "optional": "Optional"
   },
   "clientConfig": {
     "title": "Copier la configuration MCP",
@@ -1170,7 +1184,10 @@
       "confirmClear": "Supprimer toutes les politiques ? Les permissions existantes s’appliqueront.",
       "deleteRule": "Supprimer la règle {{number}}",
       "retry": "Réessayer"
-    }
+    },
+    "selectAtLeastOneExcludedGroupOrServer": "Select at least one group or server to exclude",
+    "selectAtLeastOneGroupOrServer": "Select at least one group or server",
+    "llmProviderApiKeyDescription": "API key for the model provider"
   },
   "mcpb": {
     "upload": "Télécharger",
@@ -1272,7 +1289,8 @@
     "statsError": "Échec de la récupération des statistiques utilisateur",
     "deleteConfirmation": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible.",
     "confirmDelete": "Supprimer l'utilisateur",
-    "deleteWarning": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible."
+    "deleteWarning": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible.",
+    "fetchError": "Failed to load users"
   },
   "api": {
     "errors": {
@@ -1316,7 +1334,8 @@
       "failedToGetMarketTags": "Échec de la récupération des tags du marché",
       "failedToSearchMarketServers": "Échec de la recherche des serveurs du marché",
       "failedToFilterMarketServers": "Échec du filtrage des serveurs du marché",
-      "failedToProcessMcpbFile": "Échec du traitement du fichier MCPB"
+      "failedToProcessMcpbFile": "Échec du traitement du fichier MCPB",
+      "failedToReloadServer": "Failed to reload server"
     },
     "success": {
       "serverCreated": "Serveur créé avec succès",
@@ -1595,5 +1614,43 @@
     "lifetime": "Durée du consentement (secondes)",
     "lifetimeDescription": "Durée fixe depuis l’approbation : 1–31536000 secondes (par défaut 1209600, 14 jours). Le renouvellement des jetons ne la prolonge pas.",
     "invalidLifetime": "Saisissez un entier entre 1 et 31536000 secondes."
+  },
+  "vos": {
+    "signInRequired": "Ouvrez MCPHub depuis VOS pour vous connecter avec votre compte. Vérifiez votre session VOS et réessayez.",
+    "retry": "Réessayer",
+    "followLanguage": "Follow VOS language",
+    "signInFailed": "VOS sign-in failed. Check your platform session and retry.",
+    "useVosSignIn": "Use your VOS account to sign in.",
+    "authenticationRequired": "VOS requires authentication for the dashboard and MCP endpoints.",
+    "compressionAuto": "Auto",
+    "compressionLog": "Logs",
+    "compressionSearch": "Search results",
+    "compressionDiff": "Diffs",
+    "compressionText": "Text"
+  },
+  "guide": {
+    "title": "API Integration Guide",
+    "intro": "VOS identity, authenticated MCP discovery, and automatic integration for other applications.",
+    "endpoints": "Endpoints on this device",
+    "identityLabel": "Verify identity",
+    "discoveryLabel": "Discover MCP servers",
+    "identityTitle": "1. Choose the correct identity",
+    "identityText": "User tokens identify the current VOS user and inherit that user’s server visibility. App-context tokens identify the consuming application and can only use public MCP servers. Even if VOS reports an administrator role for an app-context token, MCPHub does not grant it administrator access. No anonymous discovery or MCP invocation is enabled.",
+    "userTokenTitle": "2. Obtain a VOS user token",
+    "userTokenText": "Register the consuming application’s own public OIDC client in its VOS manifest (authorization_code, refresh_token, openid/profile/email, PKCE required). Run this code inside its VOS iframe. The platform bridge handles authorization according to platform policy. Validate state and keep access/refresh tokens in memory. Do not read another application’s browser storage or copy the platform’s permanent app token into a browser.",
+    "verifyTitle": "3. Verify the user on the backend",
+    "verifyText": "Set VOS_USERINFO_URL to http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo in the consuming backend. VOS returns direct JSON claims. Check the HTTP status, sub, and enable; never authorize from an unverified JWT or a browser-provided username/role. For human-only actions, also use MCPHub’s whoami endpoint and require kind=user. Application credentials must not be treated as human administrators.",
+    "appTokenTitle": "4. Obtain the consuming application’s VOS token",
+    "appTokenText": "VOS creates an access-token file in each installed application’s own context directory. Mount only the consuming application’s VOS_APP_CONTEXT_PATH read-only and read /var/lib/vos-context/access-token on the backend. This is a protected platform credential: a backend or privileged startup helper must have legitimate read access; do not make the file world-readable. Never log it, return it to the browser, or mount another app’s context. The consumer must join the external vos_default network.",
+    "discoveryTitle": "5. Discover available MCP servers",
+    "discoveryText": "GET /api/integration/discovery requires Authorization: Bearer <VOS_TOKEN>. The response contains data.mcp_path and data.servers with name, description, visibility, status, and per-server mcp_path. Paths are relative to the requested origin. Only enabled, authorized servers are included; commands, upstream URLs, environment variables and credentials are excluded. App-context credentials see public servers only. Do not fall back to anonymous requests when verification fails.",
+    "automaticTitle": "6. Integrate automatically from another VOS app",
+    "automaticText": "On vos_default, use the stable mcphub:3000 service alias and the discovery endpoint, then connect using Streamable HTTP with the same verified token. This Node.js example uses @modelcontextprotocol/client. If MCPHub is optional and not installed, handle DNS/connection failures with bounded retries or disable this integration. To reach a user’s private services, forward that user’s token rather than the application credential.",
+    "clientsTitle": "7. Connect an external MCP client",
+    "clientsText": "For desktop clients, create a user-level MCPHub Bearer Key in Settings and use it in the HTTP configuration below, or supply a valid VOS user token using a supported credential mechanism. Keys inherit their owner’s permissions. Do not distribute an administrator’s system key or a VOS app-context credential to individual users. Revoke MCPHub keys explicitly when offboarding a VOS user.",
+    "permissionsTitle": "8. Visibility and credential boundaries",
+    "permissionsText": "Private: owner and administrators. Public: authenticated users and applications. Shared: selected users or local user groups. Sharing usage does not share configuration management. Static upstream credentials remain shared service credentials; use personal credential bindings when upstream data must be isolated per user. App-context identities cannot use personal credential bindings. Discovery does not bypass tool permissions.",
+    "operationsTitle": "9. Runtime and lifecycle",
+    "operationsText": "Only administrators may deploy local stdio commands. A private service is not an OS sandbox. The VOS image does not mount the host Docker socket or run Docker-in-Docker. Choose CPU profiles for management and remote services; NVIDIA profiles only expose devices/drivers and do not install compatible CUDA libraries. The VOS drawer contains exactly two peer pages: Server Management and this guide."
   }
 }

@@ -1,3 +1,4 @@
+// VOS adaptation: resolve runtime configuration on nested application routes.
 import type { RuntimeConfig } from '../types/runtime';
 
 /**
@@ -54,7 +55,9 @@ export const loadRuntimeConfig = async (): Promise<RuntimeConfig> => {
     // For initial config load, we need to determine the correct path
     // Try different possible paths based on current location
     const currentPath = window.location.pathname;
+    const vosPrefix = currentPath.match(/^\/app\/com\.ictrek\.mcphub(?:\/|$)/) ? '/app/com.ictrek.mcphub' : null;
     const possibleConfigPaths = [
+      ...(vosPrefix ? [`${vosPrefix}/config`] : []),
       // If we're already on a subpath, try to use it
       currentPath.replace(/\/[^/]*$/, '') + '/config',
       // Try root config
@@ -105,3 +108,9 @@ export const loadRuntimeConfig = async (): Promise<RuntimeConfig> => {
 };
 
 export const getSmartRoutingPath = (): string => getRuntimeConfig().smartRoutingPath || '$smart';
+
+/** VOS client snippets must use the actual gateway origin and full app prefix. */
+export const getPublicBaseUrl = (configured?: string): string =>
+  getRuntimeConfig().vosAuthEnabled
+    ? `${window.location.origin}${getBasePath()}`
+    : configured?.replace(/\/+$/, '') || '';

@@ -1,3 +1,5 @@
+// VOS adaptation: expose platform sign-in mode without disabling authentication.
+import { isVosAuthEnabled } from '../services/vosAuthService.js';
 import { isHostedModeEnabled } from '../services/hostedMode.js';
 import { Request, Response } from 'express';
 import config from '../config/index.js';
@@ -38,6 +40,7 @@ export const getRuntimeConfig = (req: Request, res: Response): void => {
   try {
     const runtimeConfig = {
       basePath: config.basePath,
+      vosAuthEnabled: isVosAuthEnabled(),
       isHosted: isHostedModeEnabled(),
       smartRoutingPath: config.smartRoutingPath,
       version: config.mcpHubVersion,
@@ -68,7 +71,7 @@ export const getRuntimeConfig = (req: Request, res: Response): void => {
 export const getPublicConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const systemConfig = await getSystemConfigDao().get();
-    const skipAuth = systemConfig?.routing?.skipAuth || false;
+    const skipAuth = !isVosAuthEnabled() && (systemConfig?.routing?.skipAuth || false);
     const betterAuth = await getBetterAuthRuntimeConfig(systemConfig);
     let permissions = {};
     if (skipAuth) {

@@ -1,3 +1,5 @@
+// VOS adaptation: align the first rendered frame with the platform language.
+import { initializeVosLocale } from './services/vosLocaleService';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -18,6 +20,8 @@ async function initializeApp() {
 
     // Store config in window object
     window.__MCPHUB_CONFIG__ = config;
+    const stopVosLocale = await initializeVosLocale();
+    window.addEventListener('beforeunload', stopVosLocale, { once: true });
 
     // Start React app
     ReactDOM.createRoot(document.getElementById('root')!).render(

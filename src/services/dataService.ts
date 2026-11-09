@@ -1,3 +1,4 @@
+// VOS adaptation: application credentials have public-only MCP usage.
 import { IUser, McpSettings } from '../types/index.js';
 import { UserContextService } from './userContextService.js';
 import { UserConfig } from '../types/index.js';
@@ -10,6 +11,7 @@ export class DataService {
       return data;
     } else {
       return data.filter((item) => {
+        if ('applicationId' in currentUser && currentUser.applicationId) return item.visibility === 'public';
         if (item.owner === currentUser?.username) return true;
         // Visibility introduced in #817. Issue #1037 activates the restricted
         // 'group' scope for explicitly selected local usernames.

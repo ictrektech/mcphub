@@ -1,3 +1,6 @@
+// VOS adaptation: local passwords are unavailable in platform mode.
+import VosSignIn from '../components/VosSignIn';
+import { isVosMode } from '../services/vosAuthService';
 import { useBranding } from '@/contexts/BrandingContext';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -521,4 +524,4 @@ const LoginPage: React.FC = () => {
   );
 };
 
-export default LoginPage;
+export default function LoginEntry() { return isVosMode() ? <VosSignIn /> : <LoginPage />; }

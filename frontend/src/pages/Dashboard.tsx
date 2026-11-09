@@ -1,4 +1,4 @@
-import { getSmartRoutingPath } from '@/utils/runtime';
+import { getPublicBaseUrl, getSmartRoutingPath } from '@/utils/runtime';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -105,7 +105,7 @@ const DashboardPage: React.FC = () => {
   );
 
   const recentServers = useMemo(() => allServers.slice(0, 6), [allServers]);
-  const baseUrl = installConfig?.baseUrl?.replace(/\/+$/, '') || '';
+  const baseUrl = getPublicBaseUrl(installConfig?.baseUrl);
   const recentServerColumns =
     'minmax(220px,1.9fr) minmax(110px,0.95fr) minmax(120px,0.95fr) 80px 80px 90px 72px';
 

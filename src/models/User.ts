@@ -1,3 +1,5 @@
+// VOS adaptation: platform users are provisioned only after userinfo verification.
+import { isVosAuthEnabled } from '../services/vosAuthService.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { IUser } from '../types/index.js';
@@ -126,6 +128,7 @@ const generateRandomPassword = (): string => {
 
 // Initialize with default admin user if no users exist
 export const initializeDefaultUser = async (): Promise<void> => {
+  if (isVosAuthEnabled()) return;
   const userDao = getUserDao();
   const users = await userDao.findAll();
 

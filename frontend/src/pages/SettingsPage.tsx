@@ -1,3 +1,4 @@
+// VOS adaptation: bilingual result-compression choices.
 import { useBranding } from '@/contexts/BrandingContext';
 import { getRuntimeConfig, getSmartRoutingPath } from '@/utils/runtime';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -3361,12 +3362,12 @@ const SettingsPage: React.FC = () => {
                     className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 bg-white dark:bg-gray-800 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-select"
                     disabled={loading}
                   >
-                    <option value="auto">Auto</option>
+                    <option value="auto">{t('vos.compressionAuto')}</option>
                     <option value="json">JSON</option>
-                    <option value="log">Log</option>
-                    <option value="search">Search</option>
-                    <option value="diff">Diff</option>
-                    <option value="text">Text</option>
+                    <option value="log">{t('vos.compressionLog')}</option>
+                    <option value="search">{t('vos.compressionSearch')}</option>
+                    <option value="diff">{t('vos.compressionDiff')}</option>
+                    <option value="text">{t('vos.compressionText')}</option>
                   </select>
                 </div>
 

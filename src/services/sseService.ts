@@ -1,3 +1,5 @@
+// VOS adaptation: public means authenticated sharing, never anonymous transport access.
+import { authenticateVosToken, isVosBearerToken, isVosAuthEnabled } from './vosAuthService.js';
 import { Request, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { canAccessGroupRoute } from '../utils/groupAccess.js';
@@ -467,7 +469,7 @@ const oauthUserResult = (req: Request, user: IUser): BearerAuthResult => {
 const validateBearerAuth = async (req: Request): Promise<BearerAuthResult> => {
   const systemConfigDao = getSystemConfigDao();
   const systemConfig = await systemConfigDao.get();
-  const enableBearerAuth = systemConfig?.routing?.enableBearerAuth ?? true;
+  const enableBearerAuth = isVosAuthEnabled() || (systemConfig?.routing?.enableBearerAuth ?? true);
 
   const bearerKeyDao = getBearerKeyDao();
   const enabledKeys = await bearerKeyDao.findEnabled();
@@ -511,6 +513,15 @@ const validateBearerAuth = async (req: Request): Promise<BearerAuthResult> => {
       }
       throw error;
     }
+  }
+
+  const vosToken = parseBearerAuthorization(standardAuthHeader);
+  if (isVosAuthEnabled() && vosToken && isVosBearerToken(vosToken)) {
+    try {
+      const user = await authenticateVosToken(vosToken, { allowApplication: true });
+      const result = oauthUserResult(req, user);
+      return result.valid ? { ...result, keyName: 'VOS' } : result;
+    } catch { return { valid: false, reason: 'invalid' }; }
   }
 
   // Forward auth runs before keys and OAuth tokens: a JWT from the configured
@@ -655,7 +666,7 @@ const attachUserContextFromBearer = (result: BearerAuthResult, res: Response): v
   }
 
   const userContextService = UserContextService.getInstance();
-  if (userContextService.hasUser()) {
+  if (userContextService.hasUser() && result.keyName !== 'VOS') {
     return;
   }
 
@@ -1034,10 +1045,12 @@ export const handleMcpPostRequest = async (req: Request, res: Response): Promise
       // Bind application state to the authenticated credential, user and route.
       // Never treat caller-provided correlation metadata as identity.
       const token =
-        bearerAuthResult.keyName === FORWARD_AUTH_METHOD_LABEL
+        bearerAuthResult.keyName === 'VOS'
+          ? parseBearerAuthorization(getBearerAuthHeaderValue(req.headers, null))
+          : bearerAuthResult.keyName === FORWARD_AUTH_METHOD_LABEL
           ? getForwardAuthTokenFromHeaders(req.headers, systemConfig)
           : getBearerTokenFromHeaders(req.headers, systemConfig);
-      if (token && (systemConfig?.routing?.enableBearerAuth ?? true)) {
+      if (token && (isVosAuthEnabled() || (systemConfig?.routing?.enableBearerAuth ?? true))) {
         context.clientStateScope = createHash('sha256')
           .update(JSON.stringify([token, username || '', group || '']))
           .digest('hex');

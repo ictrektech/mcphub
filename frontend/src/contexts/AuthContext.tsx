@@ -1,3 +1,5 @@
+// VOS adaptation: establish the verified platform user before rendering protected pages.
+import { clearVosSession, getVosSession, isVosMode, watchVosUser } from '../services/vosAuthService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthState } from '../types';
 import * as authService from '../services/authService';
@@ -33,6 +35,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Load user if token exists
   useEffect(() => {
+    if (isVosMode()) {
+      let active = true;
+      let stopWatching = () => {};
+      authService.removeToken();
+      getVosSession().then(session => {
+        if (!active) return;
+        setAuth({ ...initialState, loading: false, isAuthenticated: Boolean(session), user: session?.user ?? null });
+        stopWatching = watchVosUser();
+      }).catch(() => {
+        if (active) setAuth({ ...initialState, loading: false, error: 'VOS sign-in required' });
+      });
+      return () => { active = false; stopWatching(); };
+    }
     const loadUser = async () => {
       // First check if authentication should be skipped
       const { skipAuth, permissions } = await getPublicConfig();
@@ -197,6 +212,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout function
   const logout = (): void => {
+    clearVosSession();
     authService.logout();
     setAuth({
       ...initialState,
