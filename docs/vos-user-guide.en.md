@@ -22,6 +22,8 @@ Create a second server named `vos-demo-public` with the same command and argumen
 
 Server cards show connection state, tools and errors. Edit changes the connection configuration. Disabling prevents calls; enabling restores the server. Reload rebuilds the connection and local process, which is useful after changing commands or environment variables. Delete removes the configuration, so check the selected server first. Start On Demand starts a local server when called and stops it after the idle timeout. Per-Session Client Isolation suits stateful browser servers and increases connections and processes.
 
+Enable and Reload connect asynchronously. Wait for Online and the tool list to return before calling. The card's `v1.0.0` is the demo MCP server's own version, separate from the VOS package version.
+
 Private allows the owner and administrators. Shared selects users and user groups. Public allows authenticated users and discovery by other VOS applications using their own application identity. Public does not mean anonymous. Application identities can only discover and call public servers and never inherit a platform administrator role. Private is an access scope, not an operating-system sandbox: only run trusted administrator-approved STDIO code.
 
 #### Existing servers, market and imports
@@ -33,6 +35,8 @@ Credentials manages personal upstream credentials. When a server declares person
 #### Groups, tools, prompts and resources
 
 Create a group and add servers to expose a combined group endpoint. Enable or disable individual tools, customize descriptions and configure hidden parameters to narrow the client-facing surface. Tool access policies can further restrict calls. Prompts exposes templates supplied by upstream servers; Resources reads their published content. Available capabilities depend on each server. The offline demo covers all three surfaces: tools, prompts and resources.
+
+For a reproducible group, create private `vos-demo-group` and add `vos-demo` and `vos-demo-public`. Connect to `/app/com.ictrek.mcphub/mcp/vos-demo-group`, list tools and use the returned full name. Default names include a server prefix, such as `vos-demo-add`.
 
 #### Call from an MCP client
 
@@ -70,3 +74,5 @@ Another VOS application can mount its own application-context token read-only as
 Logs shows connection, process and call errors. Settings includes keys, tool policies, Smart Routing, result compression, OAuth Server, market/system configuration and configuration export. Smart Routing, model-based compression and external markets require their own dependencies; the offline demo does not need them. Manage VOS accounts and passwords on the platform. Generic upstream authentication options do not replace VOS sign-in.
 
 For login failure, confirm that the app was opened from VOS, the platform session is valid and MCPHub is upgraded to 0.0.2, which fixes Safari's login-request credential mode on local devices. For an offline server, inspect command, arguments, dependencies, network and logs. If a server has no available tools, check permissions and server/tool switches. Export configuration before major changes and protect the application data directory and credentials with your backup policy. Upgrades preserve server configuration and do not automatically create these demo instances.
+
+These examples ran on a Thor/Spark device with Safari and Chromium UI checks. Acceptance covered tools, resources and prompts on both servers, disable/enable/reload, group calls, and another VOS application's identity discovering and calling the public instance while being excluded from private discovery and management APIs. The demo uses CPU; this does not establish GPU inference compatibility.
