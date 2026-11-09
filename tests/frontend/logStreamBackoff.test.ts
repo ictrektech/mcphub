@@ -5,6 +5,7 @@ jest.mock('../../frontend/src/utils/fetchInterceptor', () => ({
 
 jest.mock('../../frontend/src/utils/runtime', () => ({
   getApiUrl: (path: string) => `http://localhost:3000/api${path}`,
+  getRuntimeConfig: () => ({ vosAuthEnabled: false }),
 }));
 
 jest.mock('../../frontend/src/utils/interceptors', () => ({

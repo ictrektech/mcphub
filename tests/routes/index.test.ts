@@ -5,6 +5,11 @@ const routeHandler = jest.fn();
 const uploadMiddleware = jest.fn();
 const authMiddleware = jest.fn((_req, _res, next) => next());
 
+jest.mock('../../src/controllers/vosIntegrationController.js', () => ({
+  vosWhoami: routeHandler,
+  vosDiscovery: routeHandler,
+}));
+
 jest.mock('../../src/controllers/personalOAuthController.js', () => ({ managePersonalOAuth: routeHandler }));
 
 jest.mock('../../src/controllers/serverController.js', () => ({

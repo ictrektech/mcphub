@@ -24,14 +24,16 @@ case "$SHEET" in
   *) echo 'An explicit supported --sheet is required; see ictrek.app/README.md' >&2; exit 1 ;;
 esac
 BUILD_ROOT="${MCPHUB_BUILD_ROOT:-$HOME/dev/build/mcphub}"
-mkdir -p "$BUILD_ROOT/context"
-rsync -a --delete --exclude .git --exclude node_modules --exclude dist --exclude coverage "$ROOT/" "$BUILD_ROOT/context/"
+mkdir -p "$BUILD_ROOT"
+CONTEXT="$(mktemp -d "$BUILD_ROOT/context.XXXXXX")"
+trap 'rm -rf "$CONTEXT"' EXIT
+tar -C "$ROOT" --exclude=.git --exclude=node_modules --exclude=dist --exclude=coverage -cf - . | tar -C "$CONTEXT" -xf -
 REPOSITORY=swr.cn-southwest-2.myhuaweicloud.com/ictrek/mcphub
 TAG="${PREFIX}_$(TZ=Asia/Shanghai date +%Y%m%d_%H%M%S)_${COMMIT:0:10}"
 IMAGE="$REPOSITORY:$TAG"
 docker buildx build --load --provenance=false --sbom=false --platform "linux/$ARCH" \
   --target vos --build-arg INSTALL_EXT=false -t "$IMAGE" \
-  -f "$BUILD_ROOT/context/Dockerfile" "$BUILD_ROOT/context" > "$BUILD_ROOT/build-$PREFIX.log" 2>&1 </dev/null
+  -f "$CONTEXT/Dockerfile" "$CONTEXT" > "$BUILD_ROOT/build-$PREFIX.log" 2>&1 </dev/null
 # The image must contain the compiled VOS backend, frontend and a non-root runtime.
 docker run --rm --entrypoint bash "$IMAGE" -lc 'test -f dist/services/vosAuthService.js && test -f frontend/dist/index.html && id mcphub && ! command -v dockerd'
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/scripts/verify-vos-runtime.py" --image "$IMAGE"
