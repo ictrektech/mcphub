@@ -75,11 +75,27 @@ jobs:
             -F "package=@$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" -F force=true \
             http://127.0.0.1:18899/api/appstore/apps > "$HOME/dev/build/mcphub/publish-result.json"
           python3 - <<'PY'
-          import json, pathlib
+          import json, os, pathlib, urllib.request
           response = json.loads((pathlib.Path.home() / 'dev/build/mcphub/publish-result.json').read_text())
           if response.get('code') != 0:
               raise SystemExit('VOS App Store publication rejected')
-          print('VOS App Store publication confirmed')
+          base = 'http://127.0.0.1:18899'
+          app_id = 'com.ictrek.mcphub'
+          version = os.environ['PACKAGE_VERSION']
+          with urllib.request.urlopen(f'{base}/api/appstore/apps/{app_id}', timeout=30) as result:
+              record = json.load(result)
+          detail = record.get('data') or {}
+          archive = detail.get('app_tar_gz') or {}
+          expected = f'appstore/apps/{app_id}/{version}/app.tar.gz'
+          if (record.get('code') != 0 or detail.get('id') != app_id
+                  or detail.get('current_version') != version or version not in detail.get('versions', [])
+                  or archive.get('download_path') != expected or archive.get('size', 0) <= 0):
+              raise SystemExit('Published App Store record does not match the release')
+          probe = urllib.request.Request(f'{base}/store/{expected}', headers={'Range': 'bytes=0-1'})
+          with urllib.request.urlopen(probe, timeout=30) as result:
+              if result.read(2) != b'\x1f\x8b':
+                  raise SystemExit('Published App Store archive is unavailable')
+          print(f'VOS App Store publication verified: {app_id} {version}')
           PY
       - name: Close App Store tunnel
         if: always()
