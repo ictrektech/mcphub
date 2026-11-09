@@ -10,7 +10,7 @@ permissions:
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
-    if: endsWith(github.repository, 'mcphub')
+    if: github.repository == 'samanhappy/mcphub'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
