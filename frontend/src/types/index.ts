@@ -552,6 +552,7 @@ export interface BearerKey {
 // Auth types
 export interface IUser {
   username: string;
+  displayName?: string;
   isAdmin?: boolean;
   permissions?: string[];
 }

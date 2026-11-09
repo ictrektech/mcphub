@@ -4,11 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, Settings, LogOut, Info } from 'lucide-react';
 import AboutDialog from './AboutDialog';
-import SponsorDialog from './SponsorDialog';
-import WeChatDialog from './WeChatDialog';
-import WeChatIcon from '@/components/icons/WeChatIcon';
 import DiscordIcon from '@/components/icons/DiscordIcon';
-import SponsorIcon from '@/components/icons/SponsorIcon';
 import { ChangelogUpdateInfo } from '@/types';
 import {
   fetchChangelogUpdateInfo,
@@ -27,8 +23,6 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
   const [isOpen, setIsOpen] = useState(false);
   const [showNewVersionInfo, setShowNewVersionInfo] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
-  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
-  const [wechatDialogOpen, setWechatDialogOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<ChangelogUpdateInfo | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -79,16 +73,6 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
     setIsOpen(false);
   };
 
-  const handleSponsorClick = () => {
-    setSponsorDialogOpen(true);
-    setIsOpen(false);
-  };
-
-  const handleWeChatClick = () => {
-    setWechatDialogOpen(true);
-    setIsOpen(false);
-  };
-
   return (
     <div ref={menuRef} className="relative">
       <button
@@ -107,7 +91,7 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
         {!collapsed && (
           <div className="ml-3 flex flex-col items-start">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {auth.user?.username || t('auth.user')}
+              {auth.user?.displayName || auth.user?.username || t('auth.user')}
             </span>
           </div>
         )}
@@ -115,23 +99,7 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
 
       {isOpen && (
         <div className="absolute top-0 transform -translate-y-full left-0 w-full min-w-max bg-white border border-gray-200 dark:border-gray-700 dark:bg-gray-800 z-50">
-          <button
-            onClick={handleSponsorClick}
-            className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            <SponsorIcon className="h-4 w-4 mr-2" />
-            {t('sponsor.label')}
-          </button>
-
-          {i18n.resolvedLanguage === 'zh' ? (
-            <button
-              onClick={handleWeChatClick}
-              className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-            >
-              <WeChatIcon className="h-4 w-4 mr-2" />
-              {t('wechat.label')}
-            </button>
-          ) : (
+          {i18n.resolvedLanguage !== 'zh' && (
             <a
               href="https://discord.gg/2BJehJZVH5"
               target="_blank"
@@ -197,12 +165,6 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
           setShowNewVersionInfo(false);
         }}
       />
-
-      {/* Sponsor dialog */}
-      <SponsorDialog open={sponsorDialogOpen} onOpenChange={setSponsorDialogOpen} />
-
-      {/* WeChat dialog */}
-      <WeChatDialog open={wechatDialogOpen} onOpenChange={setWechatDialogOpen} />
     </div>
   );
 };

@@ -17,6 +17,7 @@ export const vosLogin = async (req: Request, res: Response): Promise<void> => {
       success: true,
       user: {
         username: user.username,
+        displayName: user.displayName,
         isAdmin: user.isAdmin,
         permissions: getDataService().getPermissions(user),
       },

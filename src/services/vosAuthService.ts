@@ -10,6 +10,7 @@ export type VosPrincipal = IUser & {
   applicationId?: string;
   vosSubject?: string;
   credentialEligible?: boolean;
+  displayName?: string;
 };
 
 // This only selects the verifier; it never authenticates or grants a role.
@@ -69,6 +70,12 @@ export async function authenticateVosToken(
   }
   // Userinfo provides the current role from the platform database, not a browser claim.
   const isAdmin = claims.role_code === 'system_admin' || claims.role_code === 'platform_admin';
+  // The local username embeds a stable digest so account renames never re-link accounts.
+  // Keep the platform's own name for display instead of exposing that namespaced key.
+  const displayName =
+    typeof claims.preferred_username === 'string'
+      ? claims.preferred_username.trim().slice(0, 80) || undefined
+      : undefined;
   // The VOS user ID survives gateway address/port changes and account renames.
   const digest = createHash('sha256').update(claims.sub).digest('hex');
   const ssoUserId = `vos:${digest}`;
@@ -99,5 +106,5 @@ export async function authenticateVosToken(
     user = await dao.update(user.username, { isAdmin });
     if (!user) throw new Error('Could not update VOS role');
   }
-  return { ...user, vosSubject: claims.sub };
+  return { ...user, vosSubject: claims.sub, displayName };
 }

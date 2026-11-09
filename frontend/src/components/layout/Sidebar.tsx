@@ -147,9 +147,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
             <span className="font-semibold tracking-tight text-[var(--hub-ink)] break-words min-w-0 max-w-full">
               {dashboardTitle}
             </span>
-            {appVersion && (
+            {appVersion && appVersion !== 'dev' && (
               <span className="hub-mono text-[10.5px] text-[var(--hub-ink-3)] flex-shrink-0">
-                {appVersion === 'dev' ? appVersion : `v${appVersion}`}
+                {`v${appVersion}`}
               </span>
             )}
           </div>
