@@ -49,7 +49,7 @@ try {
     requestInit: { headers: { Authorization: `Bearer ${process.env.MCPHUB_TOKEN}` } },
   }));
   const { tools } = await client.listTools();
-  const tool = tools.find(t => t.name === 'add' || t.name.endsWith('__add'));
+  const tool = tools.find(t => t.name === 'add' || t.name.endsWith('-add') || t.name.endsWith('__add'));
   if (!tool) throw new Error('add tool is unavailable');
   console.log(await client.callTool({ name: tool.name, arguments: { a: 7, b: 5 } }));
 } finally {
