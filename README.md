@@ -2,6 +2,8 @@
 
 > VOS fork: account integration, execution boundaries and release instructions are documented in [ictrek.app/README.md](ictrek.app/README.md).
 
+VOS user guides: [English](docs/vos-user-guide.en.md) · [中文](docs/vos-user-guide.zh-CN.md), including the bundled offline MCP server and runnable client example. The dashboard and favicon use the same icon asset as the VOS App Store.
+
 > An open-source, self-hosted MCP gateway and control plane for connecting, controlling, and operating MCP servers.
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)

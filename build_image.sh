@@ -37,6 +37,7 @@ docker buildx build --load --provenance=false --sbom=false --platform "linux/$AR
 # The image must contain the compiled VOS backend, frontend and a non-root runtime.
 docker run --rm --entrypoint bash "$IMAGE" -lc 'test -f dist/services/vosAuthService.js && test -f frontend/dist/index.html && id mcphub && ! command -v dockerd'
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/scripts/verify-vos-runtime.py" --image "$IMAGE"
+docker run --rm "$IMAGE" node scripts/verify-vos-demo.mjs
 if [[ "$BUILD_ONLY" != true ]]; then
   docker push "$IMAGE"
   docker manifest inspect "$IMAGE" >/dev/null

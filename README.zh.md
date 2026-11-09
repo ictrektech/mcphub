@@ -4,6 +4,8 @@
 
 VOS 登录请求使用同源凭据模式，兼容 Safari 访问本地设备证书的场景；后端仍校验应用 Bearer token，不使用 Cookie 代替身份认证。
 
+VOS 使用指南：[中文](docs/vos-user-guide.zh-CN.md) · [English](docs/vos-user-guide.en.md)，包含内置离线 MCP 实例和可运行的客户端调用示例。管理界面和浏览器图标复用 VOS 应用商店的同一份图标。
+
 > 开源、自托管的 MCP 网关与控制平面，用于连接、控制和运行 MCP 服务器。
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)
