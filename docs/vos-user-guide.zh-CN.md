@@ -14,7 +14,7 @@
 
 以管理员打开“服务器 → 添加”，填写：服务器名称 `vos-demo`；服务器类型“STDIO 命令”；命令 `node`；点击“添加参数”，在一个参数输入框中填 `/app/examples/vos-demo.mjs`。不要把命令和参数合成一行。在高级选项中保持“Private — 仅所有者和管理员”，然后添加。等待状态变为在线；首次配置可点击刷新查看工具列表。
 
-展开该服务器的工具，调用 `add`，输入 `a=7`、`b=5`，结果应为 `12`；调用 `echo`，输入 `message=hello MCP`，应返回同一文本。在“资源”读取 `demo://status`，应得到 `{"server":"vos-demo","status":"ready"}`。在“提示词”选择 `explain-sum`，填写字符串参数 `a=7`、`b=5`，应生成让客户端计算并解释加法的消息；提示词本身不会执行大模型推理。
+展开该服务器的工具，调用 `add`，输入 `a=7`、`b=5`，结果应为 `12`；调用 `echo`，输入 `message=hello MCP`，应返回同一文本。展开服务器卡片的“资源”确认已发现 `demo://status`，再用下方 SDK 客户端读取，应得到 `{"server":"vos-demo","status":"ready"}`。在服务器卡片的“提示词”中选择 `explain-sum`，填写字符串参数 `a=7`、`b=5`，应生成让客户端计算并解释加法的消息；提示词本身不会执行大模型推理。
 
 可以再创建 `vos-demo-public`，使用相同命令和参数，在高级选项将可见范围设为 Public。这会运行第二个独立 MCP 进程，用于验证受控共享和其他应用的服务发现。
 
@@ -34,7 +34,7 @@ Private 只允许所有者及管理员；Shared 可指定用户和用户组；Pu
 
 #### 分组、工具、提示词与资源
 
-在“分组”创建服务组合并添加成员，以分组端点接入多个服务。可以按工具启停、调整描述和配置隐藏参数，缩小客户端可调用的范围；工具访问策略用于进一步限制调用。提示词页查看上游提供的模板，资源页读取上游暴露的内容；实际能力取决于服务自身。上述离线实例可用来验证工具、提示词和资源三个页面。
+在“分组”创建服务组合并添加成员，以分组端点接入多个服务。可以按工具启停、调整描述和配置隐藏参数，缩小客户端可调用的范围；工具访问策略用于进一步限制调用。服务器卡片的提示词和资源标签展示上游条目，可调用提示词并管理启停与描述；资源内容通过 MCP 客户端读取，实际能力取决于服务自身。左侧“提示词”和“资源”页面供管理员创建、编辑、启停和删除 MCPHub 内置条目：内置提示词可配置参数，内置资源包含 URI、MIME 类型和文本内容，可通过统一 MCP 入口使用。
 
 可创建私有分组 `vos-demo-group`，加入 `vos-demo` 与 `vos-demo-public`，再通过 `/app/com.ictrek.mcphub/mcp/vos-demo-group` 调用。先列出工具并使用返回的完整名称，默认名称会带服务名前缀，例如 `vos-demo-add`。
 
@@ -56,6 +56,12 @@ try {
   const tool = tools.find(t => t.name === 'add' || t.name.endsWith('-add') || t.name.endsWith('__add'));
   if (!tool) throw new Error('add tool is unavailable');
   console.log(await client.callTool({ name: tool.name, arguments: { a: 7, b: 5 } }));
+  const resources = await client.listResources();
+  console.log(await client.readResource({ uri: resources.resources[0].uri }));
+  const prompts = await client.listPrompts();
+  console.log(await client.getPrompt({
+    name: prompts.prompts[0].name, arguments: { a: '7', b: '5' },
+  }));
 } finally {
   await client.close();
 }

@@ -14,7 +14,7 @@ The image includes `/app/examples/vos-demo.mjs`. It needs no model download, add
 
 As an administrator, choose Servers → Add. Set Server Name to `vos-demo`, Server Type to STDIO Command and command to `node`. Click Add argument and enter `/app/examples/vos-demo.mjs` in one argument field. Keep Visibility under Advanced Options set to Private — only the owner and admins, then click Add. Wait for Online and refresh the tool list if necessary. Keep command and arguments in separate fields.
 
-Call `add` with `a=7` and `b=5`; the result should be `12`. Call `echo` with `message=hello MCP`; it should return the same text. In Resources, read `demo://status`; the result should be `{"server":"vos-demo","status":"ready"}`. In Prompts, choose `explain-sum` and supply string arguments `a=7`, `b=5`. It creates a message asking a client to calculate and explain the sum; retrieving a prompt does not itself run a language model.
+Call `add` with `a=7` and `b=5`; the result should be `12`. Call `echo` with `message=hello MCP`; it should return the same text. In the server card’s Resources tab, confirm that `demo://status` was discovered, then read it with the SDK client below; the result should be `{"server":"vos-demo","status":"ready"}`. In the server card’s Prompts tab, choose `explain-sum` and supply string arguments `a=7`, `b=5`. It creates a message asking a client to calculate and explain the sum; retrieving a prompt does not itself run a language model.
 
 Create a second server named `vos-demo-public` with the same command and argument, selecting Public under Advanced Options. This starts another independent MCP process for authenticated sharing and application discovery checks.
 
@@ -34,7 +34,7 @@ Credentials manages personal upstream credentials. When a server declares person
 
 #### Groups, tools, prompts and resources
 
-Create a group and add servers to expose a combined group endpoint. Enable or disable individual tools, customize descriptions and configure hidden parameters to narrow the client-facing surface. Tool access policies can further restrict calls. Prompts exposes templates supplied by upstream servers; Resources reads their published content. Available capabilities depend on each server. The offline demo covers all three surfaces: tools, prompts and resources.
+Create a group and add servers to expose a combined group endpoint. Enable or disable individual tools, customize descriptions and configure hidden parameters to narrow the client-facing surface. Tool access policies can further restrict calls. The server card’s Prompts and Resources tabs show upstream entries, with prompt invocation, descriptions and enable switches. Read resource content through an MCP client; capabilities depend on the server. The sidebar Prompts and Resources pages let administrators create, edit, enable, disable and delete MCPHub built-in entries. Built-in prompts accept configured arguments; built-in resources contain a URI, MIME type and text content and are available through the aggregate MCP endpoint.
 
 For a reproducible group, create private `vos-demo-group` and add `vos-demo` and `vos-demo-public`. Connect to `/app/com.ictrek.mcphub/mcp/vos-demo-group`, list tools and use the returned full name. Default names include a server prefix, such as `vos-demo-add`.
 
@@ -56,6 +56,12 @@ try {
   const tool = tools.find(t => t.name === 'add' || t.name.endsWith('-add') || t.name.endsWith('__add'));
   if (!tool) throw new Error('add tool is unavailable');
   console.log(await client.callTool({ name: tool.name, arguments: { a: 7, b: 5 } }));
+  const resources = await client.listResources();
+  console.log(await client.readResource({ uri: resources.resources[0].uri }));
+  const prompts = await client.listPrompts();
+  console.log(await client.getPrompt({
+    name: prompts.prompts[0].name, arguments: { a: '7', b: '5' },
+  }));
 } finally {
   await client.close();
 }
