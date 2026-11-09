@@ -38,6 +38,26 @@ Create a group and add servers to expose a combined group endpoint. Enable or di
 
 For a reproducible group, create private `vos-demo-group` and add `vos-demo` and `vos-demo-public`. Connect to `/app/com.ictrek.mcphub/mcp/vos-demo-group`, list tools and use the returned full name. Default names include a server prefix, such as `vos-demo-add`.
 
+#### Logs, settings and troubleshooting
+
+Logs shows connection, process and call errors. Settings includes keys, tool policies, Smart Routing, result compression, OAuth Server, market/system configuration and configuration export. Smart Routing, model-based compression and external markets require their own dependencies; the offline demo does not need them. Manage VOS accounts and passwords on the platform. Generic upstream authentication options do not replace VOS sign-in.
+
+For login failure, confirm that the app was opened from VOS, the platform session is valid and MCPHub is upgraded to 0.0.2, which fixes Safari's login-request credential mode on local devices. For an offline server, inspect command, arguments, dependencies, network and logs. If a server has no available tools, check permissions and server/tool switches. Export configuration before major changes and protect the application data directory and credentials with your backup policy. Upgrades preserve server configuration and do not automatically create these demo instances.
+
+These examples ran on a Thor/Spark device with Safari and Chromium UI checks. Acceptance covered tools, resources and prompts on both servers, disable/enable/reload, group calls, and another VOS application's identity discovering and calling the public instance while being excluded from private discovery and management APIs. The demo uses CPU; this does not establish GPU inference compatibility.
+
+## Application API reference
+
+### MCPHub
+
+#### VOS tokens, user verification and automatic application integration
+
+API Integration Guide includes the complete PKCE user-token flow: call `vos_platform.api.v1000.oauth2.authorize` inside a VOS same-origin iframe, validate state, exchange the code with `token` and refresh expired credentials. Do not extract the platform login token or replace authorization with hard-coded administrator credentials.
+
+Call `GET /app/com.ictrek.mcphub/api/integration/whoami` with `Authorization: Bearer <VOS application access token>` to verify identity. Call `GET /app/com.ictrek.mcphub/api/integration/discovery` to list enabled, authorized servers and their relative MCP paths. The backend verifies the token through VOS userinfo rather than trusting browser-supplied roles.
+
+Another VOS application can mount its own application-context token read-only as shown in the guide. Its backend calls discovery and connects to public servers using the returned paths. Forward an actual user's valid authorization token when accessing their private servers. Handle MCPHub being absent, unavailable or forbidden without falling back to anonymous access. Discovery never returns commands, environment variables, upstream addresses or secrets.
+
 #### Call from an MCP client
 
 API Integration Guide provides complete device-specific URLs, desktop-client configuration and Node SDK examples. The single-server path is `/app/com.ictrek.mcphub/mcp/vos-demo`; the aggregate endpoint is `/app/com.ictrek.mcphub/mcp`. Group and user-scoped endpoints are also supported. Authenticate with a valid VOS application access token representing the user, or an MCPHub user-level Bearer Key owned by that user. User-level keys work on MCP transports, not VOS discovery/identity APIs. Store credentials in protected client configuration or environment variables, never in documentation or screenshots. The client system must trust the HTTPS certificate.
@@ -66,19 +86,3 @@ try {
   await client.close();
 }
 ```
-
-#### VOS tokens, user verification and automatic application integration
-
-API Integration Guide includes the complete PKCE user-token flow: call `vos_platform.api.v1000.oauth2.authorize` inside a VOS same-origin iframe, validate state, exchange the code with `token` and refresh expired credentials. Do not extract the platform login token or replace authorization with hard-coded administrator credentials.
-
-Call `GET /app/com.ictrek.mcphub/api/integration/whoami` with `Authorization: Bearer <VOS application access token>` to verify identity. Call `GET /app/com.ictrek.mcphub/api/integration/discovery` to list enabled, authorized servers and their relative MCP paths. The backend verifies the token through VOS userinfo rather than trusting browser-supplied roles.
-
-Another VOS application can mount its own application-context token read-only as shown in the guide. Its backend calls discovery and connects to public servers using the returned paths. Forward an actual user's valid authorization token when accessing their private servers. Handle MCPHub being absent, unavailable or forbidden without falling back to anonymous access. Discovery never returns commands, environment variables, upstream addresses or secrets.
-
-#### Logs, settings and troubleshooting
-
-Logs shows connection, process and call errors. Settings includes keys, tool policies, Smart Routing, result compression, OAuth Server, market/system configuration and configuration export. Smart Routing, model-based compression and external markets require their own dependencies; the offline demo does not need them. Manage VOS accounts and passwords on the platform. Generic upstream authentication options do not replace VOS sign-in.
-
-For login failure, confirm that the app was opened from VOS, the platform session is valid and MCPHub is upgraded to 0.0.2, which fixes Safari's login-request credential mode on local devices. For an offline server, inspect command, arguments, dependencies, network and logs. If a server has no available tools, check permissions and server/tool switches. Export configuration before major changes and protect the application data directory and credentials with your backup policy. Upgrades preserve server configuration and do not automatically create these demo instances.
-
-These examples ran on a Thor/Spark device with Safari and Chromium UI checks. Acceptance covered tools, resources and prompts on both servers, disable/enable/reload, group calls, and another VOS application's identity discovering and calling the public instance while being excluded from private discovery and management APIs. The demo uses CPU; this does not establish GPU inference compatibility.

@@ -38,6 +38,26 @@ Private 只允许所有者及管理员；Shared 可指定用户和用户组；Pu
 
 可创建私有分组 `vos-demo-group`，加入 `vos-demo` 与 `vos-demo-public`，再通过 `/app/com.ictrek.mcphub/mcp/vos-demo-group` 调用。先列出工具并使用返回的完整名称，默认名称会带服务名前缀，例如 `vos-demo-add`。
 
+#### 日志、设置与故障检查
+
+日志页用于查看连接、进程和调用错误；设置页包含 Key、工具策略、智能路由、结果压缩、OAuth Server、市场与系统配置，以及配置导出。智能路由、模型相关压缩和外部市场需要另配依赖，并非离线实例的前置条件。VOS 账户与密码在平台管理，MCPHub 中的上游通用认证设置不能代替 VOS 登录。
+
+登录失败先确认从 VOS 抽屉打开、VOS 会话有效且应用已升级至 0.0.2；该版本修复 Safari 访问本地设备时登录请求的凭据模式问题。服务器离线时检查命令、参数、网络、依赖和日志；有服务但无工具时检查权限、服务启用状态及工具开关。升级前可导出配置，并按管理员的备份策略保护应用数据目录与凭据。升级保留已有服务器配置，不会自动新建本节示例。
+
+本节示例已在 Thor/Spark 设备实际运行，并在 Safari 和 Chromium 界面验证。验收包含两个服务的工具、资源和提示词调用，停用/启用/重载，分组调用，以及另一个 VOS 应用身份发现并调用公共实例、不能发现私有实例或进入管理 API。示例使用 CPU，不代表已验收 GPU 推理工作负载。
+
+## 应用 API 接入说明
+
+### MCPHub
+
+#### VOS token、用户验证与其他应用集成
+
+API 集成指南内有完整的 PKCE 获取用户 token 示例：在 VOS 同域 iframe 中经 `vos_platform.api.v1000.oauth2.authorize` 获取授权码，再调用 `token` 交换 access token，校验 state，并在过期后刷新。不要读取平台登录 token 或用硬编码管理员凭据代替授权。
+
+带 `Authorization: Bearer <VOS 应用 access token>` 调用 `GET /app/com.ictrek.mcphub/api/integration/whoami` 验证当前身份；调用 `GET /app/com.ictrek.mcphub/api/integration/discovery` 获取已启用且当前身份有权访问的服务和相对 MCP 路径。后端会向 VOS userinfo 验证 token，而不是信任浏览器提供的角色。
+
+其他 VOS 应用可按指南只读挂载自己的应用上下文 token，由后端调用 discovery，并通过返回的路径连接公共 MCP。需要代表某个用户访问私有服务时，必须传递该用户的有效授权 token。自动集成应处理 MCPHub 未安装、服务不可用和权限不足，不得回退匿名访问。发现结果不返回命令、环境变量、上游地址或密钥。
+
 #### 从客户端调用
 
 API 集成指南提供当前设备的完整 MCP URL，以及桌面客户端和 Node SDK 示例。单服务端点为 `/app/com.ictrek.mcphub/mcp/vos-demo`；统一入口为 `/app/com.ictrek.mcphub/mcp`，也支持分组和按账户的入口。客户端需使用当前用户的 VOS 应用 access token，或该用户创建的 MCPHub 用户级 Bearer Key；用户级 Key 只用于 MCP 传输，不用于 VOS 发现/身份接口。将 token 保存在客户端的受保护配置或环境变量中，不写入文档和截图。HTTPS 证书应被运行客户端的系统信任。
@@ -66,19 +86,3 @@ try {
   await client.close();
 }
 ```
-
-#### VOS token、用户验证与其他应用集成
-
-API 集成指南内有完整的 PKCE 获取用户 token 示例：在 VOS 同域 iframe 中经 `vos_platform.api.v1000.oauth2.authorize` 获取授权码，再调用 `token` 交换 access token，校验 state，并在过期后刷新。不要读取平台登录 token 或用硬编码管理员凭据代替授权。
-
-带 `Authorization: Bearer <VOS 应用 access token>` 调用 `GET /app/com.ictrek.mcphub/api/integration/whoami` 验证当前身份；调用 `GET /app/com.ictrek.mcphub/api/integration/discovery` 获取已启用且当前身份有权访问的服务和相对 MCP 路径。后端会向 VOS userinfo 验证 token，而不是信任浏览器提供的角色。
-
-其他 VOS 应用可按指南只读挂载自己的应用上下文 token，由后端调用 discovery，并通过返回的路径连接公共 MCP。需要代表某个用户访问私有服务时，必须传递该用户的有效授权 token。自动集成应处理 MCPHub 未安装、服务不可用和权限不足，不得回退匿名访问。发现结果不返回命令、环境变量、上游地址或密钥。
-
-#### 日志、设置与故障检查
-
-日志页用于查看连接、进程和调用错误；设置页包含 Key、工具策略、智能路由、结果压缩、OAuth Server、市场与系统配置，以及配置导出。智能路由、模型相关压缩和外部市场需要另配依赖，并非离线实例的前置条件。VOS 账户与密码在平台管理，MCPHub 中的上游通用认证设置不能代替 VOS 登录。
-
-登录失败先确认从 VOS 抽屉打开、VOS 会话有效且应用已升级至 0.0.2；该版本修复 Safari 访问本地设备时登录请求的凭据模式问题。服务器离线时检查命令、参数、网络、依赖和日志；有服务但无工具时检查权限、服务启用状态及工具开关。升级前可导出配置，并按管理员的备份策略保护应用数据目录与凭据。升级保留已有服务器配置，不会自动新建本节示例。
-
-本节示例已在 Thor/Spark 设备实际运行，并在 Safari 和 Chromium 界面验证。验收包含两个服务的工具、资源和提示词调用，停用/启用/重载，分组调用，以及另一个 VOS 应用身份发现并调用公共实例、不能发现私有实例或进入管理 API。示例使用 CPU，不代表已验收 GPU 推理工作负载。
