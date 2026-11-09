@@ -136,7 +136,10 @@ export async function getVosSession(): Promise<VosSession | null> {
     // Raw fetch avoids recursively invoking the authenticated request interceptor.
     const response = await fetch(getApiUrl('/auth/vos'), {
       method: 'POST',
-      credentials: 'omit',
+      // Safari drops the user's device-certificate exception for credentialless
+      // requests. Keep the normal same-origin transport; the backend still
+      // authenticates exclusively with the verified Bearer token.
+      credentials: 'same-origin',
       headers: { Authorization: `Bearer ${token.access_token}` },
       signal: AbortSignal.timeout(10000),
     });

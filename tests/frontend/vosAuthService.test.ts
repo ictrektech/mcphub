@@ -49,7 +49,10 @@ it('uses PKCE and deduplicates concurrent login without browser token storage', 
   expect(sessions[0]?.user.username).toBe('verified-user');
   expect(login).toHaveBeenCalledWith(
     '/app/com.ictrek.mcphub/api/auth/vos',
-    expect.objectContaining({ headers: { Authorization: 'Bearer platform-token' } }),
+    expect.objectContaining({
+      credentials: 'same-origin',
+      headers: { Authorization: 'Bearer platform-token' },
+    }),
   );
 });
 it('rejects mismatched state before exchanging the authorization code', async () => {

@@ -4,6 +4,8 @@ This fork adds VOS account integration and app packaging. The upstream UI, MCP t
 
 ## Authentication and sharing
 
+The browser login request uses `credentials: 'same-origin'`, matching the VOS bridge's transport. Safari can reject credentialless requests to a device using a locally accepted certificate even when the VOS page itself loads. Cookies are not accepted as dashboard credentials: the backend still requires and verifies the application Bearer token.
+
 Open MCPHub from the VOS app drawer. The dashboard obtains an application access token through the VOS OIDC Fastpath using authorization code, PKCE S256 and a checked state. Tokens remain in memory. Every dashboard API request is verified server-side against the configured `VOS_USERINFO_URL`; redirects, invalid tokens, disabled users and unavailable verifiers fail closed. The browser cannot select the verifier URL or assert a role. VOS user-change events clear the page, and request-time identity checks catch missed events.
 
 The stable identity key uses the verified VOS `sub` in a dedicated namespace, so gateway address/port changes do not create a new account. Local usernames are namespaced, so existing local accounts are never linked by a matching username or email. Only verified `system_admin` and `platform_admin` roles map to MCPHub administrator. Current roles are re-read on dashboard requests; no first-user admin shortcut or local password login is enabled in VOS mode. Standalone deployments retain upstream authentication when `VOS_AUTH_ENABLED` is unset.

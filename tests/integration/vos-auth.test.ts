@@ -131,6 +131,11 @@ it('provisions platform users without a default local administrator', async () =
 });
 
 it('rejects missing, forged and redirected credentials, even if skipAuth is configured', async () => {
+  // Same-origin browser transport may include cookies, but cookies never replace
+  // the verified application access token on the VOS login endpoint.
+  expect(
+    (await request(app).post('/api/auth/vos').set('Cookie', 'access_token=admin-token')).status,
+  ).toBe(401);
   expect((await request(app).get('/api/auth/user')).status).toBe(401);
   expect(
     (await request(app).get('/api/auth/user').set('x-auth-token', 'forged').set('x-user', 'admin'))

@@ -2,6 +2,8 @@
 
 > VOS 适配：账户认证、运行边界和发布说明见 [ictrek.app/README.md](ictrek.app/README.md)。
 
+VOS 登录请求使用同源凭据模式，兼容 Safari 访问本地设备证书的场景；后端仍校验应用 Bearer token，不使用 Cookie 代替身份认证。
+
 > 开源、自托管的 MCP 网关与控制平面，用于连接、控制和运行 MCP 服务器。
 
 [![CI](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml/badge.svg)](https://github.com/samanhappy/mcphub/actions/workflows/ci.yml)
