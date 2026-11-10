@@ -1651,6 +1651,7 @@
     "permissionsTitle": "8. Visibility and credential boundaries",
     "permissionsText": "Private: owner and administrators. Public: authenticated users and applications. Shared: selected users or local user groups. Sharing usage does not share configuration management. Static upstream credentials remain shared service credentials; use personal credential bindings when upstream data must be isolated per user. App-context identities cannot use personal credential bindings. Discovery does not bypass tool permissions.",
     "operationsTitle": "9. Runtime and lifecycle",
-    "operationsText": "Only administrators may deploy local stdio commands. A private service is not an OS sandbox. The VOS image does not mount the host Docker socket or run Docker-in-Docker. Choose CPU profiles for management and remote services; NVIDIA profiles only expose devices/drivers and do not install compatible CUDA libraries. The VOS drawer contains exactly two peer pages: Server Management and this guide."
+    "operationsText": "Only administrators may deploy local stdio commands. A private service is not an OS sandbox. The VOS image does not mount the host Docker socket or run Docker-in-Docker. Choose CPU profiles for management and remote services; NVIDIA profiles only expose devices/drivers and do not install compatible CUDA libraries. The VOS drawer contains exactly two peer pages: Server Management and this guide.",
+    "referenceTitle": "Référence API complète"
   }
 }

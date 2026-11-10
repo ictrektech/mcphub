@@ -92,3 +92,7 @@ python3 scripts/verify-vos-runtime.py --image <locally-built-vos-image>
 ```
 
 It checks administrator/member separation, default private access, public invocation without configuration disclosure, user-level MCP client keys, stdio discovery and calls, process stop/restart/reload, non-root application execution and absence of Docker socket/daemon. `--keep-running` retains only these test containers for browser QA; the printed cleanup command removes them. The browser bridge in this fixture is simulated, so it is not evidence of real VOS OIDC integration. The fork also fixes an upstream route collision where generic OpenAPI tool routes intercepted dashboard tool calls.
+
+## VOS API reference
+
+The API Integration Guide links to a bundled bilingual complete API reference: [English](../docs/vos-api-reference.en.md) · [中文](../docs/vos-api-reference.zh.md). It documents VOS management authentication separately from MCP user Keys, complete Key creation/update/rotation/revocation semantics, personal upstream bindings, native REST operations and transport schemas. Documentation changes ship with the next application release; no new image is published for this documentation update.

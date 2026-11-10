@@ -1653,6 +1653,7 @@
     "permissionsTitle": "8. 可见性与凭据边界",
     "permissionsText": "private：所有者和管理员；public：已认证用户及应用；共享：指定用户或本地用户组。共享调用权不会开放配置管理。静态上游凭据仍是共享服务凭据；若上游数据也需按人隔离，应使用个人凭据绑定。应用 context 身份不能使用个人凭据绑定。服务发现不会绕过工具权限。",
     "operationsTitle": "9. 运行与生命周期",
-    "operationsText": "本地 stdio 命令只允许管理员部署，私有服务不是操作系统沙箱。VOS 镜像不挂载宿主 Docker socket，也不运行 Docker-in-Docker。管理和远程服务请选择 CPU profile；NVIDIA profile 仅开放设备与驱动，不会自动安装兼容的 CUDA 库。VOS 应用抽屉只有“服务管理”和本指南两个同级页面。"
+    "operationsText": "本地 stdio 命令只允许管理员部署，私有服务不是操作系统沙箱。VOS 镜像不挂载宿主 Docker socket，也不运行 Docker-in-Docker。管理和远程服务请选择 CPU profile；NVIDIA profile 仅开放设备与驱动，不会自动安装兼容的 CUDA 库。VOS 应用抽屉只有“服务管理”和本指南两个同级页面。",
+    "referenceTitle": "完整 API 参考"
   }
 }

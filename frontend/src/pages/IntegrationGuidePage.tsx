@@ -34,7 +34,7 @@ environment:
   MCPHUB_URL: http://mcphub:3000/app/com.ictrek.mcphub`;
 
 export default function IntegrationGuidePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const base = `${window.location.origin}${getBasePath()}`;
   const discovery = `${base}/api/integration/discovery`;
   const whoami = `${base}/api/integration/whoami`;
@@ -140,6 +140,12 @@ await client.close();`;
         </header>
         <div>
           <h1 className="hub-h1">{t('guide.title')}</h1>
+          <a
+            className="hub-btn mt-3 inline-flex"
+            href={`${getBasePath()}/api-reference.html#${i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'}`}
+          >
+            {t('guide.referenceTitle')}
+          </a>
           <p className="hub-sub">{t('guide.intro')}</p>
         </div>
         <section className="hub-card space-y-3 p-5" aria-label={t('guide.endpoints')}>
