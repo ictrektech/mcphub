@@ -28,11 +28,11 @@
 | --- | --- |
 | GET `/api/auth/keys` | `{success:true,data:[...]}`，token 脱敏、hash 不返回；管理员看全部，普通用户看自己的用户 Key。 |
 | POST `/api/auth/keys` | 管理员创建用户 Key：`{name,kind:"user",owner:"<已有用户>"}`；普通用户可只发 `{name}`。enabled 默认 true。201 响应的 data.token **只返回一次**，应立即安全保存。 |
-| PUT `/api/auth/keys/{id}` | 修改 name/enabled；管理员的 system Key 还可改 accessType 及允许/排除组与服务。返回脱敏元数据，不能在这里替换原始 token 或转移 owner/kind；省略保留原值。 |
+| PUT `/api/auth/keys/{id}` | 修改 name/enabled；用户 Key 还可改 accessType 和 allowedGroups。管理员的 system Key 可改其资源范围字段。返回脱敏元数据，不能在这里替换原始 token 或转移 owner/kind；省略保留原值。 |
 | POST `/api/auth/keys/{id}/reset` | 无需 body；生成新 secret，保留 owner、启用状态、资源范围。data.token 完整返回一次，旧 secret 立即失效。 |
 | DELETE `/api/auth/keys/{id}` | 所有者/管理员操作；返回 `{success:true}` 并删除 Key。 |
 
-system accessType 为 all/groups/servers/custom/exclude；允许范围用 allowedGroups/allowedServers，排除范围用 excludedGroups/excludedServers，exclude 至少指定一个排除对象。用户 Key 的 all 表示该用户实时权限范围，不能获得管理员权限。修改无关字段不会自动启用禁用的 Key。丢失 secret 要 reset，列表和修改响应无法找回。上游 OAuth 和个人凭证绑定与此处客户端 Key 无关。
+system accessType 为 all/groups/servers/custom/exclude；允许范围用 allowedGroups/allowedServers，排除范围用 excludedGroups/excludedServers，exclude 至少指定一个排除对象。用户 Key 的 `accessType` 支持 `all`（创建默认值，继承所有者实时权限）和 `groups`（在所有者权限内限定分组）。通过 POST /api/auth/keys 或 PUT /api/auth/keys/{id} 设置 `accessType` 和 `allowedGroups`。选择 `groups` 时，传入非空字符串数组，元素为现有分组名或 UUID。服务端去重并保存 UUID。更新时省略字段沿用原值，选择 `all` 清空分组列表。分组 Key 可访问 /mcp/{group}、/mcp/$smart/{group} 及对应 SSE 和用户作用域端点，全局及直连服务端点拒绝访问。不支持的范围、无效或空分组列表、未知分组均返回 HTTP 400，响应含 success:false 和 message，分别为 Personal keys support only all or groups scope、Select at least one allowed group、Allowed group not found。 修改无关字段不会自动启用禁用的 Key。丢失 secret 要 reset，列表和修改响应无法找回。上游 OAuth 和个人凭证绑定与此处客户端 Key 无关。
 
 ```sh
 # 管理使用 VOS 用户 token；不要把包含新 Key 的响应写入公开日志。

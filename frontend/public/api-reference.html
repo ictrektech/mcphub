@@ -48,7 +48,7 @@
 </tr>
 <tr>
   <td>PUT <code>/api/auth/keys/{id}</code></td>
-  <td>修改 name/enabled；管理员的 system Key 还可改 accessType 及允许/排除组与服务。返回脱敏元数据，不能在这里替换原始 token 或转移 owner/kind；省略保留原值。</td>
+  <td>修改 name/enabled；用户 Key 还可改 accessType 和 allowedGroups。管理员的 system Key 可改其资源范围字段。返回脱敏元数据，不能在这里替换原始 token 或转移 owner/kind；省略保留原值。</td>
 </tr>
 <tr>
   <td>POST <code>/api/auth/keys/{id}/reset</code></td>
@@ -60,7 +60,7 @@
 </tr>
 </tbody>
 </table>
-<p>system accessType 为 all/groups/servers/custom/exclude；允许范围用 allowedGroups/allowedServers，排除范围用 excludedGroups/excludedServers，exclude 至少指定一个排除对象。用户 Key 的 all 表示该用户实时权限范围，不能获得管理员权限。修改无关字段不会自动启用禁用的 Key。丢失 secret 要 reset，列表和修改响应无法找回。上游 OAuth 和个人凭证绑定与此处客户端 Key 无关。</p>
+<p>system accessType 为 all/groups/servers/custom/exclude；允许范围用 allowedGroups/allowedServers，排除范围用 excludedGroups/excludedServers，exclude 至少指定一个排除对象。用户 Key 的 accessType 支持 all（创建默认值，继承所有者实时权限）和 groups（在所有者权限内限定分组）。通过 POST /api/auth/keys 或 PUT /api/auth/keys/{id} 设置 accessType 和 allowedGroups。选择 groups 时，传入非空字符串数组，元素为现有分组名或 UUID。服务端去重并保存 UUID。更新时省略字段沿用原值，选择 all 清空分组列表。分组 Key 可访问 /mcp/{group}、/mcp/$smart/{group} 及对应 SSE 和用户作用域端点，全局及直连服务端点拒绝访问。不支持的范围、无效或空分组列表、未知分组均返回 HTTP 400，响应含 success:false 和 message，分别为 Personal keys support only all or groups scope、Select at least one allowed group、Allowed group not found。 修改无关字段不会自动启用禁用的 Key。丢失 secret 要 reset，列表和修改响应无法找回。上游 OAuth 和个人凭证绑定与此处客户端 Key 无关。</p>
 <pre><code class="language-sh"># 管理使用 VOS 用户 token；不要把包含新 Key 的响应写入公开日志。
 curl --fail-with-body &quot;$MCPHUB_BASE/api/auth/keys&quot; \
   -H &quot;Authorization: Bearer $VOS_USER_TOKEN&quot; -H 'Content-Type: application/json' \
@@ -4153,6 +4153,7 @@ try {
 <p><code>router</code> · <code>inline middleware/handler</code> · <a href="https://github.com/ictrektech/mcphub/blob/main/src/routes/index.ts">Source</a></p>
 <p>参数/返回委托给关联 handler；见源代码及原生说明。</p>
 <h3 id="zh-section-159">GET /config</h3>
+<p>免认证运行时配置的 data.version 返回安装的 VOS 应用包版本，控制面板左上角显示此值。</p>
 <p><code>app</code> · <code>getRuntimeConfig</code> · <a href="https://github.com/ictrektech/mcphub/blob/main/src/controllers/configController.ts#L39">Source</a></p>
 <pre><code class="language-json">{
   &quot;responses&quot;: [
@@ -7456,7 +7457,7 @@ HTTP 工作流，重新执行登录或工具初始化。</p>
 </tr>
 <tr>
   <td>PUT <code>/api/auth/keys/{id}</code></td>
-  <td>Patch name/enabled; administrator system Keys also accept accessType and allowed/excluded groups/servers. Returns masked metadata. Cannot replace raw token or transfer ownership/kind here. Omitted fields retain their values.</td>
+  <td>Patch name/enabled; user Keys also accept accessType and allowedGroups. Administrator system Keys accept their resource scope fields. Returns masked metadata. Cannot replace raw token or transfer ownership/kind here. Omitted fields retain their values.</td>
 </tr>
 <tr>
   <td>POST <code>/api/auth/keys/{id}/reset</code></td>
@@ -7468,7 +7469,7 @@ HTTP 工作流，重新执行登录或工具初始化。</p>
 </tr>
 </tbody>
 </table>
-<p>System accessType is <code>all</code>, <code>groups</code>, <code>servers</code>, <code>custom</code> or <code>exclude</code>; use allowedGroups/allowedServers for allow scopes and excludedGroups/excludedServers for exclude. Exclude requires at least one excluded resource. User Keys use the owner's live access (<code>all</code> within that user's permissions), not an independent administrator resource scope. Updating an unrelated system field does not re-enable a disabled Key. Losing a secret requires reset; list/update responses cannot recover it. Upstream OAuth credentials and personal credential bindings are independent.</p>
+<p>System accessType is <code>all</code>, <code>groups</code>, <code>servers</code>, <code>custom</code> or <code>exclude</code>; use allowedGroups/allowedServers for allow scopes and excludedGroups/excludedServers for exclude. Exclude requires at least one excluded resource. Personal Keys support all (default on creation, the owner&#x27;s live permissions) or groups (selected groups within those permissions). Set accessType and allowedGroups in POST /api/auth/keys or PUT /api/auth/keys/{id}. For groups, provide a non-empty array of existing group names or UUIDs. MCPHub deduplicates and stores UUIDs. Omitted update fields retain their values. Selecting all clears the group list. A group-scoped Key uses /mcp/{group} or /mcp/$smart/{group}, including equivalent SSE and user-scoped routes. Global and direct-server routes are denied. Invalid accessType, a missing or invalid group array, and an unknown group return HTTP 400 with success:false and message Personal keys support only all or groups scope, Select at least one allowed group, or Allowed group not found, respectively. Updating an unrelated system field does not re-enable a disabled Key. Losing a secret requires reset; list/update responses cannot recover it. Upstream OAuth credentials and personal credential bindings are independent.</p>
 <pre><code class="language-sh"># Management uses a VOS user token. Use a protected environment; do not log output secrets.
 curl --fail-with-body &quot;$MCPHUB_BASE/api/auth/keys&quot; \
   -H &quot;Authorization: Bearer $VOS_USER_TOKEN&quot; -H 'Content-Type: application/json' \
@@ -11562,6 +11563,7 @@ try {
 <p><code>router</code> · <code>inline middleware/handler</code> · <a href="https://github.com/ictrektech/mcphub/blob/main/src/routes/index.ts">Source</a></p>
 <p>Arguments/responses are delegated to the linked handler; see the native section and source.</p>
 <h3 id="en-section-159">GET /config</h3>
+<p>The public runtime configuration returns the installed VOS package version in data.version. The dashboard displays that value next to the logo.</p>
 <p><code>app</code> · <code>getRuntimeConfig</code> · <a href="https://github.com/ictrektech/mcphub/blob/main/src/controllers/configController.ts#L39">Source</a></p>
 <pre><code class="language-json">{
   &quot;responses&quot;: [
