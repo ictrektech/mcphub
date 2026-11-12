@@ -282,8 +282,8 @@ const resolveExcludedServerNames = async (key: BearerKey): Promise<string[]> => 
 };
 
 const isBearerKeyAllowedForRequest = async (req: Request, key: BearerKey): Promise<boolean> => {
-  if (key.kind === 'user') {
-    return true;
+  if (key.kind === 'user' && key.accessType !== 'all' && key.accessType !== 'groups') {
+    return false;
   }
 
   const paramValue = normalizeBearerScopeParam((req.params as any)?.group as string | undefined);
@@ -333,7 +333,9 @@ const isBearerKeyAllowedForRequest = async (req: Request, key: BearerKey): Promi
       if (key.accessType === 'groups') {
         // For group-scoped keys, check if the matched group is in allowedGroups
         const allowedGroups = key.allowedGroups || [];
-        return allowedGroups.includes(matchedGroup.name) || allowedGroups.includes(matchedGroup.id);
+        return key.kind === 'user'
+          ? allowedGroups.includes(matchedGroup.id)
+          : allowedGroups.includes(matchedGroup.name) || allowedGroups.includes(matchedGroup.id);
       }
 
       if (key.accessType === 'servers') {
@@ -560,7 +562,7 @@ const validateBearerAuth = async (req: Request): Promise<BearerAuthResult> => {
     if (matchingKey) {
       const userKeyResult = await resolveUserLevelKeyUser(req, matchingKey);
       if (!userKeyResult.valid) {
-        return { valid: true };
+        return matchingKey.kind === 'user' ? userKeyResult : { valid: true };
       }
       const allowed = await isBearerKeyAllowedForRequest(req, matchingKey);
       if (allowed) {
@@ -573,7 +575,7 @@ const validateBearerAuth = async (req: Request): Promise<BearerAuthResult> => {
       logger.warn(
         `Bearer key matched but rejected due to scope restrictions (auth disabled): id=${matchingKey.id}, name=${matchingKey.name}, accessType=${matchingKey.accessType}`,
       );
-      return { valid: true };
+      return matchingKey.kind === 'user' ? { valid: false, reason: 'invalid' } : { valid: true };
     }
 
     const oauthUser = await resolveOAuthUserFromToken(token);
