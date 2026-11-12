@@ -3,6 +3,7 @@ x-mcphub-env: &mcphub-env
   NODE_ENV: production
   BASE_PATH: /app/com.ictrek.mcphub
   VOS_AUTH_ENABLED: 'true'
+  MCPHUB_VOS_VERSION: '__APP_VERSION__'
   VOS_USERINFO_URL: http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo
   USE_DB: 'false'
   MCPHUB_SETTING_PATH: /app/data/mcp_settings.json

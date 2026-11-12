@@ -4725,6 +4725,8 @@ Arguments/responses are delegated to the linked handler; see the native section 
 
 ### GET /config
 
+The unauthenticated `GET /app/com.ictrek.mcphub/config` returns the installed VOS package version as the string `data.version`, for example `1.2.3-vos.01`. The dashboard shows this value beside the logo. The response shape and status codes are unchanged.
+
 `app` · `getRuntimeConfig` · [Source](https://github.com/ictrektech/mcphub/blob/main/src/controllers/configController.ts#L39)
 
 ```json

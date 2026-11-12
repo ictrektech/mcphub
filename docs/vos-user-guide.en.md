@@ -1,6 +1,6 @@
 ### MCPHub: run, manage and call MCP servers
 
-Applies to VOS MCPHub 0.0.2. MCPHub brings local and remote MCP servers into one gateway with server management, tools, groups, prompts, resources and application integration. The VOS app drawer contains two peer pages: Server Management and API Integration Guide.
+Applies to VOS MCPHub 1.2.3-vos.01. MCPHub brings local and remote MCP servers into one gateway with server management, tools, groups, prompts, resources and application integration. The VOS app drawer contains two peer pages: Server Management and API Integration Guide.
 
 #### Install, sign in and choose a language
 
@@ -42,7 +42,7 @@ For a reproducible group, create private `vos-demo-group` and add `vos-demo` and
 
 Logs shows connection, process and call errors. Settings includes keys, tool policies, Smart Routing, result compression, OAuth Server, market/system configuration and configuration export. Smart Routing, model-based compression and external markets require their own dependencies; the offline demo does not need them. Manage VOS accounts and passwords on the platform. Generic upstream authentication options do not replace VOS sign-in.
 
-For login failure, confirm that the app was opened from VOS, the platform session is valid and MCPHub is upgraded to 0.0.2, which fixes Safari's login-request credential mode on local devices. For an offline server, inspect command, arguments, dependencies, network and logs. If a server has no available tools, check permissions and server/tool switches. Export configuration before major changes and protect the application data directory and credentials with your backup policy. Upgrades preserve server configuration and do not automatically create these demo instances.
+For login failure, confirm that the app was opened from VOS, the platform session is valid and MCPHub is upgraded to 1.2.3-vos.01, which fixes Safari's login-request credential mode on local devices. For an offline server, inspect command, arguments, dependencies, network and logs. If a server has no available tools, check permissions and server/tool switches. Export configuration before major changes and protect the application data directory and credentials with your backup policy. Upgrades preserve server configuration and do not automatically create these demo instances.
 
 These examples ran on a Thor/Spark device with Safari and Chromium UI checks. Acceptance covered tools, resources and prompts on both servers, disable/enable/reload, group calls, and another VOS application's identity discovering and calling the public instance while being excluded from private discovery and management APIs. The demo uses CPU; this does not establish GPU inference compatibility.
 

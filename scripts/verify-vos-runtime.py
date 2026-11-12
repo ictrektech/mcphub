@@ -38,7 +38,7 @@ def main():
                '--security-opt', 'no-new-privileges:true', '-v', f'{temp}/data:/app/data',
                '-v', f'{root}/tests/fixtures:/validation:ro', '-e', 'VOS_AUTH_ENABLED=true',
                '-e', 'VOS_USERINFO_URL=http://identity:9000/userinfo', '-e', 'BASE_PATH=/app/com.ictrek.mcphub',
-               '-e', 'NODE_ENV=production', '-e', 'USE_DB=false', args.image)
+               '-e', 'MCPHUB_VOS_VERSION=1.2.3-vos.01', '-e', 'NODE_ENV=production', '-e', 'USE_DB=false', args.image)
         port = docker('port', identity, '9000/tcp').rsplit(':', 1)[1]
         base = f'http://127.0.0.1:{port}/app/com.ictrek.mcphub'
 
@@ -65,6 +65,7 @@ def main():
                 time.sleep(1)
         else:
             raise RuntimeError('VOS image did not become ready')
+        assert api('/config')['data']['version'] == '1.2.3-vos.01'
         api('/api/auth/user', user=None, expected=401)
         admin = api('/api/auth/user')['user']
         member = api('/api/auth/user', user='member')['user']

@@ -79,6 +79,8 @@ python3 -m unittest discover -s ictrek.app/scripts -p 'test_vos_package.py'
 bash ictrek.app/scripts/update_version.sh patch
 ```
 
+After merging an official release from `samanhappy/mcphub`, set `ictrek.app/UPSTREAM_VERSION` to its tag without `v`. The VOS release script starts at `1.2.3-vos.01` for upstream `1.2.3` and increments the suffix for subsequent VOS releases. For upstream prereleases, it appends `.vos.01` to the existing prerelease segment. Use `--dry-run` to preview the next version. The installed package supplies the dashboard version through `MCPHUB_VOS_VERSION` and `GET /app/com.ictrek.mcphub/config` exposes it as `data.version`.
+
 The release workflow resolves images from the exact `mcphub` column in all six sheets, creates a pull package, publishes a public release, and sends the archive to the VOS App Store through the existing SSH tunnel flow. Generated package files are under `~/dev/build/mcphub/ictrek.app`; `MCPHUB_PACKAGE_DIR` can select another build-directory location. The package has no dependency on PGV or V-Scheduler. Runtime credentials, settings, caches and personal credential key files live under the VOS application's data mount; preserve that directory during upgrade.
 
 A successful source build or package test is not a published release or device installation. Validate actual VOS login, account switching, page routing and representative MCP calls on the target device before claiming end-to-end support. GPU execution additionally needs a real device-specific MCP workload test.

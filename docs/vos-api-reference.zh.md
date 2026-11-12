@@ -4724,6 +4724,8 @@ try {
 
 ### GET /config
 
+免认证接口 `GET /app/com.ictrek.mcphub/config` 的字符串字段 `data.version` 返回已安装的 VOS 应用包版本，例如 `1.2.3-vos.01`，用于左上角图标旁的版本显示。响应结构及状态码保持一致。
+
 `app` · `getRuntimeConfig` · [Source](https://github.com/ictrektech/mcphub/blob/main/src/controllers/configController.ts#L39)
 
 ```json

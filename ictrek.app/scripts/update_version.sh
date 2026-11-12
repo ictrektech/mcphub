@@ -3,17 +3,16 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 version_file="$root/ictrek.app/VERSION"
-part="${1:-patch}"
-current="$(tr -d '[:space:]' < "$version_file")"
-[[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid VERSION: $current" >&2; exit 1; }
-IFS=. read -r major minor patch <<< "$current"
-case "$part" in
-  patch) patch=$((patch + 1)) ;;
-  minor) minor=$((minor + 1)); patch=0 ;;
-  major) major=$((major + 1)); minor=0; patch=0 ;;
-  *) echo "Usage: $0 [patch|minor|major]" >&2; exit 1 ;;
-esac
-version="${major}.${minor}.${patch}"
+mode="${1:-patch}"
+[[ "$#" -le 1 && ( "$mode" == patch || "$mode" == --dry-run ) ]] || {
+  echo "Usage: $0 [patch|--dry-run]" >&2
+  exit 1
+}
+version="$(python3 "$root/ictrek.app/scripts/vos_version.py" next)"
+if [[ "$mode" == --dry-run ]]; then
+  printf '%s\n' "$version"
+  exit 0
+fi
 trigger="vos-mcphub-v${version}"
 public_tag="v${version}"
 cd "$root"

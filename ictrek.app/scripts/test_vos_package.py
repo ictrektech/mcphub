@@ -16,8 +16,8 @@ class PackageTests(unittest.TestCase):
             packager.DIST = Path(temp)
             images = {key: 'registry.example/test/mcphub:offline-test' for key in packager.PROFILES}
             stage = Path(temp) / 'staging'
-            packager.render('0.0.1', images, stage)
-            output = packager.package('0.0.1', stage)
+            packager.render('1.2.3-vos.01', images, stage)
+            output = packager.package('1.2.3-vos.01', stage)
             self.assertTrue(output.is_file())
             compose = yaml.safe_load((stage / 'docker-compose.yml').read_text())
             manifest = yaml.safe_load((stage / 'manifest.yml').read_text())
@@ -29,6 +29,7 @@ class PackageTests(unittest.TestCase):
                 self.assertNotIn('privileged', service)
                 self.assertTrue(all('docker.sock' not in volume for volume in service['volumes']))
                 self.assertEqual(service['environment']['VOS_AUTH_ENABLED'], 'true')
+                self.assertEqual(service['environment']['MCPHUB_VOS_VERSION'], '1.2.3-vos.01')
             for profile in manifest['profiles']:
                 self.assertEqual(set(profile['conflicts']), {p['name'] for p in manifest['profiles']} - {profile['name']})
 
@@ -38,7 +39,7 @@ class PackageTests(unittest.TestCase):
     def test_missing_image_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix='mcphub-missing-', dir=os.environ.get('TMPDIR')) as temp:
             with self.assertRaisesRegex(RuntimeError, 'unrendered image'):
-                packager.render('0.0.1', {}, Path(temp) / 'stage')
+                packager.render('1.2.3-vos.01', {}, Path(temp) / 'stage')
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,3 +1,4 @@
+import { getRuntimeConfig } from '@/utils/runtime';
 // VOS adaptation: link to the dedicated integration guide.
 import { useBranding } from '@/contexts/BrandingContext';
 import appIcon from '../../../../ictrek.app/src/icon.png';
@@ -46,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
   const { groups } = useGroupData();
   const [activityAvailable, setActivityAvailable] = useState(false);
 
-  const appVersion = import.meta.env.PACKAGE_VERSION as string;
+  const appVersion = getRuntimeConfig().version;
 
   useEffect(() => {
     checkActivityAvailable()

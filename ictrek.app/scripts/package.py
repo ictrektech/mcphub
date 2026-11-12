@@ -176,8 +176,10 @@ def main() -> None:
     parser.add_argument("--version", default=os.getenv("PACKAGE_VERSION", ""))
     args = parser.parse_args()
     version = args.version or (ROOT / "VERSION").read_text().strip()
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        raise SystemExit(f"invalid version: {version}")
+    from vos_version import UPSTREAM_VERSION, split_version
+
+    if split_version(version)[0] != UPSTREAM_VERSION:
+        raise SystemExit(f"VOS version must follow upstream {UPSTREAM_VERSION}")
     print(f"[INFO] Package version: {version}")
     print("[INFO] Image source: pull")
     feishu = Feishu()

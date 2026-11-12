@@ -43,7 +43,7 @@ export const getRuntimeConfig = (req: Request, res: Response): void => {
       vosAuthEnabled: isVosAuthEnabled(),
       isHosted: isHostedModeEnabled(),
       smartRoutingPath: config.smartRoutingPath,
-      version: config.mcpHubVersion,
+      version: process.env.MCPHUB_VOS_VERSION || config.mcpHubVersion,
       name: config.mcpHubName,
     };
 

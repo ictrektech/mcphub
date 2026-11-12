@@ -16,7 +16,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#vos-mcphub-v}"
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          python3 ictrek.app/scripts/vos_version.py check "$VERSION"
           [[ "$(tr -d '[:space:]' < ictrek.app/VERSION)" == "$VERSION" ]]
           echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "MCPHUB_PACKAGE_DIR=$HOME/dev/build/mcphub/ictrek.app" >> "$GITHUB_ENV"
