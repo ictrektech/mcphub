@@ -9,3 +9,5 @@ Choose the CPU profile unless a local stdio server needs GPU access. NVIDIA prof
 Settings and caches persist in the app's data directory. Back it up, including credential encryption keys, before upgrade. Private visibility is not process/filesystem isolation; install local command servers only from trusted sources.
 
 The interface follows VOS language by default. Use the language menu to choose English or Chinese explicitly, or return to automatic following. Platform language changes apply without reloading the page.
+
+On VOS with Traefik v3, opening the app root directly in a browser redirects to its VOS page. Embedded pages and API requests use their existing routes.

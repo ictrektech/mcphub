@@ -24,7 +24,7 @@ x-mcphub-base: &mcphub-base
     traefik.docker.network: vos_default
     traefik.http.routers.mcphub.rule: PathPrefix(`/app/com.ictrek.mcphub`)
     traefik.http.services.mcphub.loadbalancer.server.port: '3000'
-    traefik.http.routers.mcphub-top-open.rule: PathPrefix(`/app/com.ictrek.mcphub`) && HeadersRegexp(`Sec-Fetch-Dest`, `document`)
+    traefik.http.routers.mcphub-top-open.rule: (Path(`/app/com.ictrek.mcphub`) || Path(`/app/com.ictrek.mcphub/`)) && HeaderRegexp(`Sec-Fetch-Dest`, `document`)
     traefik.http.routers.mcphub-top-open.priority: '1000'
     traefik.http.routers.mcphub-top-open.service: mcphub
     traefik.http.routers.mcphub-top-open.middlewares: mcphub-top-open-redirect
