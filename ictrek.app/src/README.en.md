@@ -10,4 +10,4 @@ Settings and caches persist in the app's data directory. Back it up, including c
 
 The interface follows VOS language by default. Use the language menu to choose English or Chinese explicitly, or return to automatic following. Platform language changes apply without reloading the page.
 
-On VOS with Traefik v3, opening the app root directly in a browser redirects to its VOS page. Embedded pages and API requests use their existing routes.
+On VOS with Traefik v3, opening the app root directly in a browser redirects to App Drawer → MCPHub → Server Management. Embedded pages and API requests use their existing routes.

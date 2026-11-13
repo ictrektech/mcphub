@@ -29,7 +29,7 @@ x-mcphub-base: &mcphub-base
     traefik.http.routers.mcphub-top-open.service: mcphub
     traefik.http.routers.mcphub-top-open.middlewares: mcphub-top-open-redirect
     traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.regex: '^(https?://[^/]+)/app/com\.ictrek\.mcphub/?(?:\?.*)?$'
-    traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.replacement: '$${1}/#/app/com.ictrek.mcphub/mcphub'
+    traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.replacement: '$${1}/#/app/app-drawer/com.ictrek.mcphub/mcphub'
     traefik.http.middlewares.mcphub-top-open-redirect.redirectregex.permanent: 'false'
   healthcheck:
     test:
