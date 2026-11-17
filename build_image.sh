@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # VOS adaptation: run on a build host after syncing the authoritative local checkout.
+#
+# One command, no sheet bookkeeping: the host architecture decides which release
+# sheets this image satisfies, the local commit names the tag, and a single build
+# is recorded for every sheet of that architecture. MCPHub has no accelerator
+# dependency, so the CUDA and CPU rows of one architecture are the same artifact.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHEET=""; COMMIT=""; BUILD_ONLY=false
@@ -9,32 +14,56 @@ while [[ $# -gt 0 ]]; do
     --commit) COMMIT="$2"; shift 2 ;;
     --images) [[ "$2" == mcphub ]] || { echo 'Only mcphub is supported' >&2; exit 1; }; shift 2 ;;
     --build-only) BUILD_ONLY=true; shift ;;
-    -h|--help) echo 'build_image.sh --sheet <platform-sheet> --commit <local-source-commit> [--images mcphub] [--build-only]'; exit 0 ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: build_image.sh [--commit <sha>] [--build-only] [--sheet <sheet>]
+
+Builds this checkout for the host architecture only. Everything else is inferred:
+  --commit    source commit in the tag; defaults to the local HEAD
+  --build-only  build and verify without pushing or recording the release sheet
+  --sheet     limit the released sheets to one entry (default: every sheet of
+              this architecture)
+EOF
+      exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-[[ "$COMMIT" =~ ^[a-f0-9]{7,40}$ ]] || { echo 'Pass the authoritative local source commit with --commit' >&2; exit 1; }
-case "$SHEET" in
-  AMD_with_mxn100) ARCH=amd64; PREFIX=amd_cpu ;;
-  AMD_with_cuda) ARCH=amd64; PREFIX=amd ;;
-  ARM_without_cuda) ARCH=arm64; PREFIX=arm_cpu ;;
-  ARM_with_cuda) ARCH=arm64; PREFIX=arm ;;
-  l4t) ARCH=arm64; PREFIX=l4t ;;
-  thor_spark) ARCH=arm64; PREFIX=thor_spark ;;
-  *) echo 'An explicit supported --sheet is required; see ictrek.app/README.md' >&2; exit 1 ;;
+
+case "$(uname -m)" in
+  x86_64|amd64)
+    ARCH=amd64; NATIVE=x86_64
+    PREFIX=amd_cpu
+    DEFAULT_SHEETS='AMD_with_mxn100 AMD_with_cuda' ;;
+  aarch64|arm64)
+    ARCH=arm64; NATIVE=aarch64
+    PREFIX=arm_cpu
+    DEFAULT_SHEETS='ARM_without_cuda ARM_with_cuda l4t thor_spark' ;;
+  *)
+    echo "Unsupported build architecture: $(uname -m)" >&2; exit 1 ;;
 esac
+
+if [[ -z "$COMMIT" ]]; then
+  COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+  [[ -n "$COMMIT" ]] || { echo 'Pass the source commit with --commit (not a git checkout)' >&2; exit 1; }
+fi
+[[ "$COMMIT" =~ ^[a-f0-9]{7,40}$ ]] || { echo "Not a commit hash: $COMMIT" >&2; exit 1; }
+SHORT_COMMIT="${COMMIT:0:10}"
+
+if [[ -n "$SHEET" ]]; then
+  declare -a SHEETS=("$SHEET")
+else
+  read -r -a SHEETS <<< "$DEFAULT_SHEETS"
+fi
+
 BUILD_ROOT="${MCPHUB_BUILD_ROOT:-$HOME/dev/build/mcphub}"
 mkdir -p "$BUILD_ROOT"
 REPOSITORY=swr.cn-southwest-2.myhuaweicloud.com/ictrek/mcphub
-SHORT_COMMIT="${COMMIT:0:10}"
 TAG="${PREFIX}_$(TZ=Asia/Shanghai date +%Y%m%d_%H%M%S)_${SHORT_COMMIT}"
 IMAGE="$REPOSITORY:$TAG"
 LOG="$BUILD_ROOT/build-$PREFIX.log"
 
-# This application has no accelerator dependency: the sheets only differ by CPU
-# architecture, so the CUDA and CPU rows of one architecture are byte-identical
-# images. Reuse an image already built here for the same architecture and commit
-# instead of paying for the same build six times.
+# Reuse an image already built here for the same architecture and commit: the
+# release sheets of one architecture differ only in their table row.
 find_reusable_image() {
   local want_arch="$1" tag arch
   while read -r tag; do
@@ -47,9 +76,10 @@ find_reusable_image() {
   return 1
 }
 
+echo "host $(uname -m) → linux/$ARCH, sheets: ${SHEETS[*]}, commit $SHORT_COMMIT"
 REUSED=false
 if REUSE_TAG="$(find_reusable_image "$ARCH")"; then
-  echo "Reusing $REPOSITORY:$REUSE_TAG for linux/$ARCH (commit $SHORT_COMMIT already built)"
+  echo "Reusing $REPOSITORY:$REUSE_TAG (same architecture and commit; nothing to rebuild)"
   docker tag "$REPOSITORY:$REUSE_TAG" "$IMAGE"
   REUSED=true
 else
@@ -70,6 +100,8 @@ docker run --rm "$IMAGE" node scripts/verify-vos-demo.mjs
 if [[ "$BUILD_ONLY" != true ]]; then
   docker push "$IMAGE"
   docker manifest inspect "$IMAGE" >/dev/null
-  python3 "$ROOT/ictrek.app/scripts/record_image.py" --sheet "$SHEET" --component mcphub --repository "$REPOSITORY" --tag "$TAG"
+  for sheet in "${SHEETS[@]}"; do
+    python3 "$ROOT/ictrek.app/scripts/record_image.py" --sheet "$sheet" --component mcphub --repository "$REPOSITORY" --tag "$TAG"
+  done
 fi
-echo "Built image: $IMAGE (published=$([[ "$BUILD_ONLY" == false ]] && echo true || echo false), reused=$REUSED)"
+echo "Image: $IMAGE (published=$([[ "$BUILD_ONLY" == false ]] && echo true || echo false), reused=$REUSED, sheets=${SHEETS[*]})"

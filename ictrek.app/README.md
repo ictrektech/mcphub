@@ -59,14 +59,16 @@ NVIDIA profiles declare `software: [cuda]` and `runtime: nvidia`; dedicated devi
 
 All Git operations run on the local workstation. Before each remote build/test, rsync this checkout to `~/dev/repos/mcphub` on an architecture-matched build machine. Builds copy into `~/dev/build/mcphub`; do not build VOS images on the Mac.
 
-On the build machine, with the authoritative local commit passed explicitly:
+On the build machine:
 
 ```bash
-bash build_image.sh --sheet ARM_without_cuda --commit <local-source-commit> --images mcphub --build-only
-# After verification, omit --build-only to push the image and record its tag.
+bash build_image.sh --build-only
+# After verification, omit --build-only to push the image and record its sheets.
 ```
 
-The explicit sheet controls architecture and tag prefix; the script never runs Git or SSH. Build every required platform/sheet before releasing. Unchanged published images can be reused. Image publication and Feishu read-back must succeed before triggering packaging. Feishu's spreadsheet ID is fixed; authentication uses the approved host credential file, never a repository secret containing the document ID.
+The host architecture selects the platform, tag prefix and release sheets — MCPHub has no accelerator dependency, so one AMD64 build serves `AMD_with_mxn100` and `AMD_with_cuda`, and one ARM64 build serves the four ARM sheets. The tag uses the local `HEAD` commit unless `--commit` overrides it. An image already built here for the same architecture and commit is reused instead of rebuilt; `--sheet` narrows the recorded sheets when only one row should change.
+
+The build streams progress to the terminal and appends the full buildx log to `~/dev/build/mcphub/build-<prefix>.log`. Build every architecture before releasing. Image publication and Feishu read-back must succeed before triggering packaging. Feishu's spreadsheet ID is fixed; authentication uses the approved host credential file, never a repository secret containing the document ID.
 
 ```bash
 # On a build machine, using its existing pnpm/Node >=22 environment:
