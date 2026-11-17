@@ -7,20 +7,23 @@
 # dependency, so the CUDA and CPU rows of one architecture are the same artifact.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHEET=""; COMMIT=""; BUILD_ONLY=false
+SHEET=""; COMMIT=""; BUILD_ONLY=false; ALLOW_DIRTY=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sheet) SHEET="$2"; shift 2 ;;
     --commit) COMMIT="$2"; shift 2 ;;
     --images) [[ "$2" == mcphub ]] || { echo 'Only mcphub is supported' >&2; exit 1; }; shift 2 ;;
     --build-only) BUILD_ONLY=true; shift ;;
+    --allow-dirty) ALLOW_DIRTY=true; shift ;;
     -h|--help)
       cat <<'EOF'
 Usage: build_image.sh [--commit <sha>] [--build-only] [--sheet <sheet>]
 
 Builds this checkout for the host architecture only. Everything else is inferred:
-  --commit    source commit in the tag; defaults to the local HEAD
+  --commit    source commit in the tag; defaults to the local HEAD and must
+              match the checked-out commit
   --build-only  build and verify without pushing or recording the release sheet
+  --allow-dirty build a working tree with uncommitted changes anyway
   --sheet     limit the released sheets to one entry (default: every sheet of
               this architecture)
 EOF
@@ -47,6 +50,29 @@ if [[ -z "$COMMIT" ]]; then
   [[ -n "$COMMIT" ]] || { echo 'Pass the source commit with --commit (not a git checkout)' >&2; exit 1; }
 fi
 [[ "$COMMIT" =~ ^[a-f0-9]{7,40}$ ]] || { echo "Not a commit hash: $COMMIT" >&2; exit 1; }
+
+# The tag names a commit, so the build context must actually be that commit:
+# the tarball below copies the working tree, not the object database, and an
+# unrelated tree would publish an image whose name lies about its contents.
+HEAD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+RESOLVED_COMMIT="$(git -C "$ROOT" rev-parse --verify --quiet "${COMMIT}^{commit}" 2>/dev/null || true)"
+if [[ -n "$HEAD_COMMIT" && -n "$RESOLVED_COMMIT" ]]; then
+  if [[ "$RESOLVED_COMMIT" != "$HEAD_COMMIT" ]]; then
+    echo "Checkout is at $HEAD_COMMIT, but --commit resolves to $RESOLVED_COMMIT." >&2
+    echo 'Check out that commit first, or drop --commit to build the current HEAD.' >&2
+    exit 1
+  fi
+  DIRTY="$(git -C "$ROOT" status --porcelain 2>/dev/null || true)"
+  if [[ -n "$DIRTY" ]]; then
+    if [[ "$ALLOW_DIRTY" != true ]]; then
+      echo 'Working tree has uncommitted changes, so the image would not match the commit in its tag:' >&2
+      printf '%s\n' "$DIRTY" | head -10 >&2
+      echo 'Commit or stash them, or pass --allow-dirty to build the working tree anyway.' >&2
+      exit 1
+    fi
+    echo "WARNING: building a dirty working tree; the tag still names $COMMIT" >&2
+  fi
+fi
 SHORT_COMMIT="${COMMIT:0:10}"
 
 if [[ -n "$SHEET" ]]; then

@@ -66,7 +66,7 @@ bash build_image.sh --build-only
 # After verification, omit --build-only to push the image and record its sheets.
 ```
 
-The host architecture selects the platform, tag prefix and release sheets — MCPHub has no accelerator dependency, so one AMD64 build serves `AMD_with_mxn100` and `AMD_with_cuda`, and one ARM64 build serves the four ARM sheets. The tag uses the local `HEAD` commit unless `--commit` overrides it. An image already built here for the same architecture and commit is reused instead of rebuilt; `--sheet` narrows the recorded sheets when only one row should change.
+The host architecture selects the platform, tag prefix and release sheets — MCPHub has no accelerator dependency, so one AMD64 build serves `AMD_with_mxn100` and `AMD_with_cuda`, and one ARM64 build serves the four ARM sheets. The tag names the local `HEAD` commit unless `--commit` overrides it, and the script refuses to build when `--commit` resolves to a different commit than the checkout or when the working tree has uncommitted changes, because the tarball copies the working tree rather than the object database (`--allow-dirty` overrides the second check for local experiments). An image already built here for the same architecture and commit is reused instead of rebuilt; `--sheet` narrows the recorded sheets when only one row should change.
 
 The build streams progress to the terminal and appends the full buildx log to `~/dev/build/mcphub/build-<prefix>.log`. Build every architecture before releasing. Image publication and Feishu read-back must succeed before triggering packaging. Feishu's spreadsheet ID is fixed; authentication uses the approved host credential file, never a repository secret containing the document ID.
 
