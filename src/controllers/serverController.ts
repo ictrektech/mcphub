@@ -258,6 +258,7 @@ const CONNECTION_RELEVANT_CONFIG_FIELDS = [
   'env',
   'headers',
   'passthroughHeaders',
+  'forwardVosToken',
   'options',
   'oauth',
   'openapi',

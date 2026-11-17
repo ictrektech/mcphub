@@ -22,7 +22,16 @@ export const hasCredentialTemplate = (config?: ServerConfig): boolean =>
   Array.isArray(config?.credentialTemplate) && config.credentialTemplate.length > 0;
 
 export const hasPersonalAuthentication = (config?: ServerConfig): boolean =>
-  hasCredentialTemplate(config) || config?.oauth?.identityMode === 'personal';
+  hasCredentialTemplate(config) ||
+  config?.oauth?.identityMode === 'personal' ||
+  // VOS token forwarding has no stored credential, but the upstream identity is
+  // still the caller's own, so it shares the per-principal connection runtime.
+  config?.forwardVosToken === true;
+
+// A VOS-forwarding server derives its credential from the caller's request, so
+// it never participates in the stored-binding machinery below.
+export const forwardsVosToken = (config?: ServerConfig): boolean =>
+  config?.forwardVosToken === true;
 
 export const credentialSlotId = (slot: CredentialSlot): string => `${slot.target}.${slot.name}`;
 

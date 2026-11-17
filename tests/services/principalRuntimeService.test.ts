@@ -10,13 +10,18 @@ const mockDefinition: ServerConfigWithName = {
   credentialTemplate: [{ target: 'env', name: 'KEY' }],
 };
 let mockRevision = 'first';
+// Tests swap this in to prove a code path never consults stored bindings.
+let mockResolveBindingOverride: (() => Promise<unknown>) | undefined;
 jest.mock('../../src/dao/DaoFactory.js', () => ({
   getUserDao: () => ({ findByUsername: async () => ({ isAdmin: true }) }),
   getServerDao: () => ({ findById: async () => mockDefinition }),
 }));
 jest.mock('../../src/services/credentialBindingService.js', () => ({
   credentialBindingEvents: new (jest.requireActual('node:events').EventEmitter)(),
-  resolveCredentialBinding: async () => ({ config: mockDefinition, revision: mockRevision }),
+  resolveCredentialBinding: async () =>
+    mockResolveBindingOverride
+      ? mockResolveBindingOverride()
+      : { config: mockDefinition, revision: mockRevision },
 }));
 
 const info = (): ServerInfo => ({
@@ -171,4 +176,37 @@ test('tools-only restoration rejects a binding rotation during cache lookup', as
     },
   );
   await expect(pool.acquire('shared', alice, true)).rejects.toThrow('changed');
+});
+
+test('a VOS-forwarding server connects per principal without stored bindings', async () => {
+  const restore = { ...mockDefinition };
+  Object.assign(mockDefinition, {
+    name: 'gitea',
+    type: 'streamable-http',
+    url: 'http://gitea:8080/app/com.ictrek.gitea/mcp',
+    command: undefined,
+    args: undefined,
+    credentialTemplate: undefined,
+    forwardVosToken: true,
+  });
+  // If the resolver branch were wrong, the stored-binding path would answer
+  // instead of the forwarding path, and this failure would surface.
+  mockResolveBindingOverride = async () => {
+    throw new Error('stored bindings must not be consulted for a VOS-forwarding server');
+  };
+  try {
+    const connect = jest.fn(async () => info());
+    const pool = new PrincipalRuntimeService(connect, jest.fn());
+    const lease = await pool.acquire('gitea', alice);
+    expect(connect).toHaveBeenCalledWith(
+      'gitea',
+      expect.objectContaining({ forwardVosToken: true }),
+      { username: alice.username, revision: 'vos-forward' },
+    );
+    lease.release();
+    pool.invalidate();
+  } finally {
+    mockResolveBindingOverride = undefined;
+    Object.assign(mockDefinition, restore);
+  }
 });

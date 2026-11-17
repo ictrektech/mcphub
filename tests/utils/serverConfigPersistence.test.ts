@@ -496,3 +496,49 @@ describe('authorization relay configuration', () => {
     ).toThrow('Invalid oauth.authorizationRelay');
   });
 });
+
+describe('forwardVosToken configuration', () => {
+  it('normalizes the flag on a streamable-http server and clears it when off', () => {
+    const on = normalizeServerConfigForPersistence({
+      type: 'streamable-http',
+      url: 'http://gitea:8080/app/com.ictrek.gitea/mcp',
+      forwardVosToken: true,
+    });
+    expect(on.forwardVosToken).toBe(true);
+
+    const off = normalizeServerConfigForPersistence({
+      type: 'streamable-http',
+      url: 'http://gitea:8080/app/com.ictrek.gitea/mcp',
+      forwardVosToken: false,
+    });
+    expect(off).toHaveProperty('forwardVosToken', undefined);
+  });
+
+  it.each([
+    { type: 'stdio' as const, command: 'gitea-mcp' },
+    { type: 'openapi' as const, openapi: { inputMode: 'url' as const, url: 'http://gitea/openapi.json' } },
+  ])('rejects the flag on non-HTTP server %j', (config) => {
+    expect(() =>
+      normalizeServerConfigForPersistence({ ...config, forwardVosToken: true }),
+    ).toThrow('VOS token forwarding requires an HTTP MCP server');
+  });
+
+  it('rejects the flag combined with credential slots or personal OAuth', () => {
+    expect(() =>
+      normalizeServerConfigForPersistence({
+        type: 'streamable-http',
+        url: 'http://gitea:8080/app/com.ictrek.gitea/mcp',
+        forwardVosToken: true,
+        credentialTemplate: [{ target: 'headers', name: 'Authorization' }],
+      }),
+    ).toThrow('VOS token forwarding requires');
+    expect(() =>
+      normalizeServerConfigForPersistence({
+        type: 'streamable-http',
+        url: 'http://gitea:8080/app/com.ictrek.gitea/mcp',
+        forwardVosToken: true,
+        oauth: { identityMode: 'personal' },
+      }),
+    ).toThrow('VOS token forwarding requires');
+  });
+});

@@ -507,6 +507,7 @@ export interface ServerConfig {
   env?: Record<string, string>; // Environment variables
   headers?: Record<string, string>; // HTTP headers for SSE/streamable-http/openapi servers
   passthroughHeaders?: string[]; // Header names to pass through from MCP requests to upstream SSE/streamable-http servers
+  forwardVosToken?: boolean; // VOS adaptation: authenticate this upstream with the caller's own VOS token instead of a stored credential
   enabled?: boolean; // Flag to enable/disable the server
   owner?: string; // Owner of the server, defaults to 'admin' user
   // Per-server visibility for non-admin users.

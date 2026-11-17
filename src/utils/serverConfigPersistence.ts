@@ -345,6 +345,16 @@ export const normalizeServerConfigForPersistence = (config: ServerConfig): Serve
       'Personal OAuth requires an HTTP MCP server without shared tokens, pending authorization or credential slots',
     );
   }
+  if (
+    config.forwardVosToken === true &&
+    (!['sse', 'streamable-http'].includes(normalizedType || '') ||
+      config.credentialTemplate?.length ||
+      oauth?.identityMode === 'personal')
+  ) {
+    throw new ServerConfigValidationError(
+      'VOS token forwarding requires an HTTP MCP server without credential slots or personal OAuth',
+    );
+  }
   const openapi = normalizeOpenApi(config.openapi);
 
   // Default visibility to 'private' so file-defined and freshly-created servers behave
@@ -378,6 +388,9 @@ export const normalizeServerConfigForPersistence = (config: ServerConfig): Serve
       visibility === 'group' ? normalizeSharedUsers(config.sharedWithUserGroups) : undefined,
     options,
     perSessionClient: config.perSessionClient === true ? true : undefined,
+    // Explicit key even when off, so the DAO's shallow merge lets a previously
+    // enabled server be turned back off (same reason as startOnDemand below).
+    forwardVosToken: config.forwardVosToken === true ? true : undefined,
     // The dashboard sends `startOnDemand: undefined` when the toggle is off, which
     // JSON.stringify strips from the PUT body. Without an explicit key here the
     // DAO update's shallow merge ({...existing, ...updates}) treats the field as
@@ -411,6 +424,7 @@ export const normalizeServerConfigForPersistence = (config: ServerConfig): Serve
     normalized.env = undefined;
     normalized.headers = headers;
     normalized.passthroughHeaders = undefined;
+    normalized.forwardVosToken = undefined;
     normalized.oauth = undefined;
     normalized.enableKeepAlive = undefined;
     normalized.keepAliveInterval = undefined;
@@ -440,6 +454,7 @@ export const normalizeServerConfigForPersistence = (config: ServerConfig): Serve
   normalized.env = env;
   normalized.headers = undefined;
   normalized.passthroughHeaders = undefined;
+  normalized.forwardVosToken = undefined;
   normalized.oauth = undefined;
   normalized.enableKeepAlive = undefined;
   normalized.keepAliveInterval = undefined;

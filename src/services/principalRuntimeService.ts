@@ -7,7 +7,7 @@ import {
 import { getServerDao } from '../dao/DaoFactory.js';
 import { credentialBindingEvents, resolveCredentialBinding } from './credentialBindingService.js';
 import { authorizationService, type RequestPrincipal } from './authorizationService.js';
-import { CredentialBindingError, hasPersonalAuthentication } from '../utils/credentialTemplate.js';
+import { CredentialBindingError, forwardsVosToken, hasPersonalAuthentication } from '../utils/credentialTemplate.js';
 import { expandServerConfig } from './serverConfigEnvironment.js';
 import type { CapabilityScope } from './capabilitySnapshotService.js';
 import type { ServerConfig, ServerInfo, Tool } from '../types/index.js';
@@ -22,6 +22,20 @@ interface RuntimeEntry {
   active: number;
   timer?: NodeJS.Timeout;
 }
+
+/**
+ * Resolve the runtime config for a VOS-forwarding server.
+ *
+ * There is no stored credential: the caller's own VOS token rides on every
+ * upstream request through the request-context-aware fetch, so the resolver
+ * only echoes the definition back. The constant revision means the per-user
+ * connection survives token refreshes instead of reconnecting on each one.
+ */
+const resolveForwardedVosConfig = async (
+  _serverName: string,
+  _username: string,
+  config: ServerConfig,
+): Promise<{ config: ServerConfig; revision: string }> => ({ config, revision: 'vos-forward' });
 
 /** Reuses children across MCP sessions, but never across authenticated principals. */
 export class PrincipalRuntimeService {
@@ -88,7 +102,11 @@ export class PrincipalRuntimeService {
     }
     // These snapshots only detect runtime changes in memory; they are never persisted or logged.
     const definitionSnapshot = JSON.stringify(definition);
-    const resolver = hasPersonalOAuth(definition) ? resolvePersonalOAuth : resolveCredentialBinding;
+    const resolver = forwardsVosToken(definition)
+      ? resolveForwardedVosConfig
+      : hasPersonalOAuth(definition)
+        ? resolvePersonalOAuth
+        : resolveCredentialBinding;
     if (toolsOnly && this.restoreTools) {
       const resolved = await resolver(
         serverName,

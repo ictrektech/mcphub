@@ -57,6 +57,7 @@ import { UserContextService } from './userContextService.js';
 import { deleteCredentialBindings, missingCredentialError } from './credentialBindingService.js';
 import {
   CredentialBindingError,
+  forwardsVosToken,
   hasCredentialTemplate,
   hasPersonalAuthentication,
   resolveCredentialArguments,
@@ -89,6 +90,13 @@ import { assertSafeUrl, createRedirectValidatingFetch } from '../utils/ssrf.js';
 import { createAbortIsolatingFetch } from '../utils/abortIsolatingFetch.js';
 import { ResilientJsonSchemaValidator } from '../utils/jsonSchemaValidator.js';
 import { getUserDao } from '../dao/index.js';
+import {
+  BUILTIN_GITEA_SERVER_NAME,
+  BUILTIN_PROBE_INTERVAL_MS,
+  builtinServersEnabled,
+  ensureBuiltinGiteaServer,
+  isForwardingServerAvailable,
+} from './builtinServerProvisioning.js';
 import {
   ServerInfo,
   ServerConfig,
@@ -393,7 +401,35 @@ const wrapWithProxychains = (
   };
 };
 
+/**
+ * Companion apps (Gitea today) may be installed after the hub started, so a
+ * missing built-in server is re-probed periodically instead of requiring a
+ * restart. When the upstream finally answers, the entry is created and picked
+ * up by a scoped re-registration.
+ */
+let builtinProbeTimer: NodeJS.Timeout | null = null;
+
+const startBuiltinServerProbe = (): void => {
+  if (builtinProbeTimer || !builtinServersEnabled()) return;
+  builtinProbeTimer = setInterval(() => {
+    void (async () => {
+      try {
+        if (!(await ensureBuiltinGiteaServer())) return;
+        await registerAllTools(false, BUILTIN_GITEA_SERVER_NAME);
+        broadcastToolListChanged();
+      } catch (error) {
+        logger.warn('Built-in server probe failed:', error);
+      }
+    })();
+  }, BUILTIN_PROBE_INTERVAL_MS);
+  // Never keep the process alive for a probe.
+  builtinProbeTimer.unref?.();
+};
+
 export const initUpstreamServers = async (): Promise<void> => {
+  // A provisioned companion server must exist before the first registration pass.
+  await ensureBuiltinGiteaServer();
+
   // Initialize OAuth clients for servers with dynamic registration
   await initializeAllOAuthClients();
 
@@ -402,6 +438,8 @@ export const initUpstreamServers = async (): Promise<void> => {
 
   // Initialize smart routing service with references to mcpService functions
   initSmartRoutingService(getVisibleServerInfos, filterToolsByConfig, filterToolsByGroup);
+
+  startBuiltinServerProbe();
 };
 
 type McpServerDescriptor = {
@@ -1784,6 +1822,41 @@ export const createRequestContextAwareFetch = (
   };
 };
 
+/**
+ * Forward the caller's VOS identity to the upstream on every HTTP request.
+ *
+ * A `forwardVosToken` server has no stored credential: the platform token the
+ * caller presented (already validated by the auth middleware) authenticates
+ * each upstream request in that caller's name. Reading the token from the
+ * request context — not once at connect time — keeps a refreshed token flowing
+ * without tearing down the per-principal connection. Requests outside a
+ * request context (none are expected for these servers) go out unchanged.
+ */
+export const createVosTokenForwardingFetch = (baseFetch: FetchLike): FetchLike => {
+  return async (url: string | URL, init?: RequestInit) => {
+    const requestHeaders = RequestContextService.getInstance().getHeaders();
+    const token = headerValueToString(getHeaderValue(requestHeaders ?? {}, 'authorization'));
+    if (token === undefined) {
+      return baseFetch(url, init);
+    }
+
+    const headers = init?.headers;
+    const entries =
+      headers instanceof Headers
+        ? [...headers.entries()]
+        : Array.isArray(headers)
+          ? headers
+          : Object.entries(headers ?? {});
+    return baseFetch(url, {
+      ...init,
+      headers: {
+        ...Object.fromEntries(entries.filter(([name]) => name.toLowerCase() !== 'authorization')),
+        authorization: token,
+      },
+    });
+  };
+};
+
 // Helper function to create transport based on server configuration
 /**
  * Remove any Authorization header (case-insensitive) from a headers map.
@@ -1825,19 +1898,30 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
         ? conf.headers
         : replaceEnvVars(conf.headers, env)
       : {};
+    // A forwarding server's identity comes from the caller per request; a
+    // stale static Authorization would authenticate background traffic as the
+    // configured account instead of failing loudly.
+    if (forwardsVosToken(conf)) headers = stripAuthorizationHeader(headers);
     const baseFetch = createAbortIsolatingFetch(createFetchWithProxy(getProxyConfigFromEnv(env)));
+    const principalAwareFetch = forwardsVosToken(conf)
+      ? createVosTokenForwardingFetch(baseFetch)
+      : baseFetch;
     const requestAwareFetch = createRedirectValidatingFetch(
-      createRequestContextAwareFetch(baseFetch, conf.passthroughHeaders),
+      createRequestContextAwareFetch(principalAwareFetch, conf.passthroughHeaders),
       allowInternal,
       undefined,
       undefined,
       conf.id,
     );
 
-    // Create OAuth provider if configured - SDK will handle authentication automatically
-    const authProvider = hasCredentialTemplate(conf)
-      ? undefined
-      : await createOAuthProvider(name, conf);
+    // Create OAuth provider if configured - SDK will handle authentication automatically.
+    // A forwarding server authenticates with the caller's own token, so a 401 must
+    // surface to the caller instead of starting an OAuth dance the caller never
+    // asked for (it would also replace the forwarded Authorization with a hub token).
+    const authProvider =
+      hasCredentialTemplate(conf) || forwardsVosToken(conf)
+        ? undefined
+        : await createOAuthProvider(name, conf);
     if (authProvider) {
       options.authProvider = authProvider;
       // When the OAuth provider is active, strip any static Authorization
@@ -1868,19 +1952,25 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
         ? conf.headers
         : replaceEnvVars(conf.headers, env)
       : {};
+    if (forwardsVosToken(conf)) headers = stripAuthorizationHeader(headers);
     const baseFetch = createAbortIsolatingFetch(createFetchWithProxy(getProxyConfigFromEnv(env)));
+    const principalAwareFetch = forwardsVosToken(conf)
+      ? createVosTokenForwardingFetch(baseFetch)
+      : baseFetch;
     const requestAwareFetch = createRedirectValidatingFetch(
-      createRequestContextAwareFetch(baseFetch, conf.passthroughHeaders),
+      createRequestContextAwareFetch(principalAwareFetch, conf.passthroughHeaders),
       allowInternal,
       undefined,
       undefined,
       conf.id,
     );
 
-    // Create OAuth provider if configured - SDK will handle authentication automatically
-    const authProvider = hasCredentialTemplate(conf)
-      ? undefined
-      : await createOAuthProvider(name, conf);
+    // Create OAuth provider if configured - SDK will handle authentication automatically.
+    // Forwarding servers opt out for the same reason as the streamable-http branch.
+    const authProvider =
+      hasCredentialTemplate(conf) || forwardsVosToken(conf)
+        ? undefined
+        : await createOAuthProvider(name, conf);
     if (authProvider) {
       options.authProvider = authProvider;
       // Drop static Authorization header when OAuth manages auth (see above).
@@ -2316,6 +2406,17 @@ export const initializeClientsFromSettings = async (
           createTime: Date.now(),
           enabled: false,
         });
+        continue;
+      }
+
+      // A forwarding server exists to reach a companion app with the caller's own
+      // token. If that app is not deployed yet, publish nothing at all: no entry
+      // on the dashboard and no error. The built-in probe re-registers it once the
+      // upstream answers.
+      if (
+        forwardsVosToken(expandedConf) &&
+        !(await isForwardingServerAvailable(name, expandedConf.url))
+      ) {
         continue;
       }
 
