@@ -409,27 +409,35 @@ const wrapWithProxychains = (
  */
 let builtinProbeTimer: NodeJS.Timeout | null = null;
 
+/**
+ * Provision the built-in servers and register whatever appeared.
+ *
+ * Never awaited by the startup path: the probe takes as long as its timeout
+ * when the companion app is absent, and `/mcp` is only mounted once upstream
+ * initialization resolves — boot must not wait for a sibling that may not
+ * exist. The entry still shows up within one registration pass of the probe
+ * answering.
+ */
+const provisionBuiltinServers = async (): Promise<void> => {
+  try {
+    if (!(await ensureBuiltinGiteaServer())) return;
+    await registerAllTools(false, BUILTIN_GITEA_SERVER_NAME);
+    broadcastToolListChanged();
+  } catch (error) {
+    logger.warn('Built-in server provisioning failed:', error);
+  }
+};
+
 const startBuiltinServerProbe = (): void => {
   if (builtinProbeTimer || !builtinServersEnabled()) return;
   builtinProbeTimer = setInterval(() => {
-    void (async () => {
-      try {
-        if (!(await ensureBuiltinGiteaServer())) return;
-        await registerAllTools(false, BUILTIN_GITEA_SERVER_NAME);
-        broadcastToolListChanged();
-      } catch (error) {
-        logger.warn('Built-in server probe failed:', error);
-      }
-    })();
+    void provisionBuiltinServers();
   }, BUILTIN_PROBE_INTERVAL_MS);
   // Never keep the process alive for a probe.
   builtinProbeTimer.unref?.();
 };
 
 export const initUpstreamServers = async (): Promise<void> => {
-  // A provisioned companion server must exist before the first registration pass.
-  await ensureBuiltinGiteaServer();
-
   // Initialize OAuth clients for servers with dynamic registration
   await initializeAllOAuthClients();
 
@@ -439,7 +447,13 @@ export const initUpstreamServers = async (): Promise<void> => {
   // Initialize smart routing service with references to mcpService functions
   initSmartRoutingService(getVisibleServerInfos, filterToolsByConfig, filterToolsByGroup);
 
-  startBuiltinServerProbe();
+  // Provision after the first pass, off the startup path (see provisionBuiltinServers).
+  // Tests boot the hub with fixtures rather than a deployed platform, and a probe
+  // timer would outlive the run (Jest reports the leaked handle).
+  if (process.env.NODE_ENV !== 'test') {
+    void provisionBuiltinServers();
+    startBuiltinServerProbe();
+  }
 };
 
 type McpServerDescriptor = {
