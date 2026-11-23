@@ -14,12 +14,13 @@ import { timingSafeEqual } from 'node:crypto';
 
 const verifiedVosUsers = new WeakMap<Request, VosPrincipal>();
 
-// Static integration token for cross-node management. When set via
-// MCPHUB_INTEGRATION_TOKEN, a Bearer token matching this value is accepted even
-// in VOS mode, where only short-lived VOS user tokens are otherwise valid.
-// Central MCPHub stores this token in its remote-node whitelist; the remote
-// MCPHub has the same value in its environment. Unset => no behavior change.
-const integrationToken = process.env.MCPHUB_INTEGRATION_TOKEN || '';
+import { resolveIntegrationToken } from '../constants/integrationToken.js';
+
+// Cross-node integration token: a built-in default means every MCPHub built
+// from the same release trusts the same token, so new nodes need no per-machine
+// token setup. MCPHUB_INTEGRATION_TOKEN can still override it for deployments
+// that want an explicit secret. Restricted to the dashboard API (see below).
+const integrationToken = resolveIntegrationToken();
 
 const matchesIntegrationToken = (candidate?: string): boolean => {
   if (!integrationToken || !candidate) return false;

@@ -53,7 +53,6 @@ const RemoteNodesPage: React.FC = () => {
   const [serversLoading, setServersLoading] = useState<Record<string, boolean>>({});
   const [discovered, setDiscovered] = useState<DiscoveredNode[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [importToken, setImportToken] = useState('');
   const [discovering, setDiscovering] = useState(false);
 
   const load = useCallback(async () => {
@@ -138,21 +137,15 @@ const RemoteNodesPage: React.FC = () => {
   };
 
   const importSelected = async () => {
-    if (!importToken.trim()) {
-      setError(t('remoteNodes.tokenRequired'));
-      return;
-    }
     setError('');
     const result = await apiPost<ApiResult<RemoteNode[]>>('/remote-nodes/import', {
       ids: selectedIds,
       nodes: discovered ?? [],
-      token: importToken,
     });
     if (result.success) {
       setNotice(t('remoteNodes.imported', { count: selectedIds.length }));
       setDiscovered(null);
       setSelectedIds([]);
-      setImportToken('');
       await load();
     } else {
       setError(result.message ?? t('remoteNodes.importFailed'));
@@ -274,13 +267,6 @@ const RemoteNodesPage: React.FC = () => {
             ))}
             {discovered.some((n) => !n.alreadyManaged) && (
               <div className="flex items-center gap-2">
-                <input
-                  className={inputClass}
-                  type="password"
-                  value={importToken}
-                  placeholder={t('remoteNodes.importTokenHint')}
-                  onChange={(e) => setImportToken(e.target.value)}
-                />
                 <button className="hub-btn primary" onClick={() => void importSelected()} disabled={selectedIds.length === 0}>
                   {t('remoteNodes.importButton')}
                 </button>

@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.js';
+import { resolveIntegrationToken } from '../constants/integrationToken.js';
 import { loadOriginalSettings, saveSettings } from '../config/index.js';
 import type { RemoteNodeConfig } from '../types/index.js';
 
@@ -223,9 +224,11 @@ export const discoverNodesFromScheduler = async (): Promise<DiscoveredNodeView[]
 export const importDiscoveredNodes = (
   ids: string[],
   discovered: DiscoveredNodeView[],
-  token: string,
+  token?: string,
 ): RemoteNodeView[] => {
-  if (!token?.trim()) throw new RemoteNodeError('Integration token is required', 400);
+  // Token is optional: every node from the same release trusts the built-in
+  // default. Use the provided token only when an operator overrides it.
+  const effectiveToken = token?.trim() || resolveIntegrationToken();
   const selected = discovered.filter((node) => ids.includes(node.id));
   if (selected.length === 0) throw new RemoteNodeError('No nodes selected', 400);
   const nodes = readNodes();
@@ -242,7 +245,7 @@ export const importDiscoveredNodes = (
         id: item.id,
         name: item.name,
         baseUrl: item.baseUrl,
-        token,
+        token: effectiveToken,
         profile: item.profile,
         enabled: true,
         createdAt: new Date().toISOString(),

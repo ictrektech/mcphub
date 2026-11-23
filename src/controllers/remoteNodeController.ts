@@ -74,8 +74,8 @@ export const discoverFromScheduler = async (_req: Request, res: Response): Promi
 export const importFromScheduler = async (req: Request, res: Response): Promise<void> => {
   try {
     const { ids, nodes, token } = req.body ?? {};
-    if (!Array.isArray(ids) || !Array.isArray(nodes) || typeof token !== 'string') {
-      res.status(400).json({ success: false, message: 'ids, nodes and token are required' });
+    if (!Array.isArray(ids) || !Array.isArray(nodes)) {
+      res.status(400).json({ success: false, message: 'ids and nodes are required' });
       return;
     }
     const imported = importDiscoveredNodes(ids, nodes, token);
