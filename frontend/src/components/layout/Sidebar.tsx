@@ -18,7 +18,6 @@ import {
   ScrollText,
   KeyRound,
   BookOpen,
-  Network,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useServerContext } from '@/contexts/ServerContext';
@@ -81,9 +80,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
   const systemItems: MenuItem[] = [
     ...(userCanManageUsers
       ? [{ path: '/users', label: t('nav.users'), icon: <UsersIcon className="h-4 w-4" /> }]
-      : []),
-    ...(auth.user?.isAdmin
-      ? [{ path: '/remote-nodes', label: t('nav.remoteNodes'), icon: <Network className="h-4 w-4" /> }]
       : []),
     ...(activityAvailable && auth.user?.isAdmin
       ? [{ path: '/activity', label: t('nav.activity'), icon: <Activity className="h-4 w-4" /> }]

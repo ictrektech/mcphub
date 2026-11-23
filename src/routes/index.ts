@@ -197,18 +197,6 @@ import {
 import { auth } from '../middlewares/auth.js';
 import { requireAdminMiddleware } from '../utils/requireAdmin.js';
 import {
-  addRemoteNode,
-  discoverFromScheduler,
-  editRemoteNode,
-  getRemoteNodes,
-  getRemoteServers,
-  importFromScheduler,
-  registerNodeServers,
-  removeRemoteNode,
-  removeRemoteServer,
-  toggleRemoteServerStatus,
-} from '../controllers/remoteNodeController.js';
-import {
   getBetterAuthRuntimeConfig,
   setMountedSsoProviders,
 } from '../services/betterAuthConfig.js';
@@ -297,27 +285,6 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     if (!isReplicaMode()) { res.sendStatus(404); return; }
     res.json({ success: true, data: replicaStatus() });
   });
-
-  // Admin-only remote node management (central management across machines)
-  authenticatedRouter.get('/remote-nodes/discover', requireAdminMiddleware, discoverFromScheduler);
-  authenticatedRouter.post('/remote-nodes/import', requireAdminMiddleware, importFromScheduler);
-  authenticatedRouter.get('/remote-nodes', requireAdminMiddleware, getRemoteNodes);
-  authenticatedRouter.post('/remote-nodes', requireAdminMiddleware, addRemoteNode);
-  authenticatedRouter.put('/remote-nodes/:id', requireAdminMiddleware, editRemoteNode);
-  authenticatedRouter.delete('/remote-nodes/:id', requireAdminMiddleware, removeRemoteNode);
-  authenticatedRouter.get('/remote-nodes/:id/servers', requireAdminMiddleware, getRemoteServers);
-  authenticatedRouter.post('/remote-nodes/:id/register', requireAdminMiddleware, registerNodeServers);
-  authenticatedRouter.post(
-    '/remote-nodes/:id/servers/:name/toggle',
-    requireAdminMiddleware,
-    toggleRemoteServerStatus,
-  );
-  authenticatedRouter.delete(
-    '/remote-nodes/:id/servers/:name',
-    requireAdminMiddleware,
-    removeRemoteServer,
-  );
-
   authenticatedRouter.use(replicaConfiguration);
   // `authenticatedRouter` is mounted at the end of this function, after the public
   // routes below have been registered on `router`. The order matters: the limiter

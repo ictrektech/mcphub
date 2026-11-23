@@ -10,25 +10,8 @@ import { authenticateForwardAuthToken } from '../services/forwardAuthService.js'
 import { bearerKeyMatches } from '../utils/bearerKeyToken.js';
 import { getBearerTokenFromHeaders, getForwardAuthTokenFromHeaders } from '../utils/bearerAuth.js';
 import { logger } from '../utils/logger.js';
-import { timingSafeEqual } from 'node:crypto';
 
 const verifiedVosUsers = new WeakMap<Request, VosPrincipal>();
-
-import { resolveIntegrationToken } from '../constants/integrationToken.js';
-
-// Cross-node integration token: a built-in default means every MCPHub built
-// from the same release trusts the same token, so new nodes need no per-machine
-// token setup. MCPHUB_INTEGRATION_TOKEN can still override it for deployments
-// that want an explicit secret. Restricted to the dashboard API (see below).
-const integrationToken = resolveIntegrationToken();
-
-const matchesIntegrationToken = (candidate?: string): boolean => {
-  if (!integrationToken || !candidate) return false;
-  const a = Buffer.from(candidate);
-  const b = Buffer.from(integrationToken);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-};
 
 const isTestEnv =
   process.env.NODE_ENV === 'test' ||
@@ -135,18 +118,6 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
     try {
       const bearer = req.header('authorization');
       const token = req.header('x-vos-token') ?? (bearer?.startsWith('Bearer ') ? bearer.slice(7) : undefined);
-      // Cross-node integration: accept a configured static token as admin without
-      // going through VOS. Restricted to the management API surface so it cannot
-      // be used to reach MCP tool routes.
-      if (matchesIntegrationToken(token) && isDashboardApiRequest(req)) {
-        (req as Request & { user?: unknown }).user = {
-          username: 'integration',
-          isAdmin: true,
-          credentialEligible: false,
-        };
-        next();
-        return;
-      }
       const allowApplication = ['/integration/discovery', '/integration/whoami'].includes(req.path);
       const user = verifiedVosUsers.get(req) ?? await authenticateVosToken(token, { allowApplication });
       verifiedVosUsers.set(req, user);

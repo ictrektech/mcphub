@@ -45,7 +45,6 @@ export class DataService {
       // TODO: apply userConfig to filter settings as needed
       // const userConfig = settings.userConfigs?.[currentUser?.username || ''];
       delete result.userConfigs;
-      delete result.remoteNodes;
       return result;
     }
   }
@@ -61,11 +60,6 @@ export class DataService {
       result.groups = newSettings.groups;
       result.oauthClients = newSettings.oauthClients;
       result.oauthTokens = newSettings.oauthTokens;
-      if (newSettings.remoteNodes !== undefined) {
-        result.remoteNodes = newSettings.remoteNodes;
-      } else if (result.remoteNodes === undefined) {
-        result.remoteNodes = [];
-      }
       return result;
     } else {
       const result = JSON.parse(JSON.stringify(all));

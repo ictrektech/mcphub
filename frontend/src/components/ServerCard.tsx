@@ -530,15 +530,6 @@ const ServerCard = ({
                 >
                   {server.name}
                 </span>
-                {server.config?.nodeName && (
-                  <span
-                    className="hub-tag flex-shrink-0"
-                    title={`${t('server.originNode', 'Node')}: ${server.config.nodeName}${server.config.nodeProfile ? ` · ${server.config.nodeProfile}` : ''}`}
-                    style={{ fontSize: 11, color: 'var(--hub-accent)' }}
-                  >
-                    <span className="truncate">@{server.config.nodeName}</span>
-                  </span>
-                )}
                 {displayedVersion && (
                   <span
                     className="hub-tag min-w-0"
