@@ -7,6 +7,15 @@ x-mcphub-env: &mcphub-env
   VOS_USERINFO_URL: http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo
   USE_DB: 'false'
   MCPHUB_SETTING_PATH: /app/data/mcp_settings.json
+  # Set by the deployment/operator when cross-node management is enabled.
+  # Must match the token stored in the central hub's remote-node whitelist.
+  MCPHUB_INTEGRATION_TOKEN: ${MCPHUB_INTEGRATION_TOKEN:-}
+  # V-Scheduler node discovery (central hub only): admin API endpoint + token.
+  MCPHUB_VSCHEDULER_URL: ${MCPHUB_VSCHEDULER_URL:-http://v-scheduler:38120}
+  MCPHUB_VSCHEDULER_TOKEN: ${MCPHUB_VSCHEDULER_TOKEN:-}
+  # Host port published for cross-node access (see ports below). The central
+  # hub must set MCPHUB_REMOTE_PORT to the same value to build node URLs.
+  MCPHUB_HOST_PORT: ${MCPHUB_HOST_PORT:-3000}
 
 x-mcphub-base: &mcphub-base
   restart: unless-stopped
@@ -14,6 +23,12 @@ x-mcphub-base: &mcphub-base
   stop_grace_period: 30s
   security_opt: ['no-new-privileges:true']
   environment: *mcphub-env
+  # Cross-node management: publish the dashboard/API port on the host so other
+  # MCPHub instances can reach this node's /mcp and /api directly. The host port
+  # is configurable (3000 is often taken by other apps); the container still
+  # listens on 3000. Traefik labels below keep the in-cluster route unchanged.
+  ports:
+    - '${MCPHUB_HOST_PORT:-3000}:3000'
   volumes:
     - ${VOS_APP_STORAGE_PATH}/data:/app/data
   networks:

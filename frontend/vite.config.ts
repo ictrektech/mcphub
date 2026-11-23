@@ -63,7 +63,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      proxy: createDevProxyConfig(env.BASE_PATH),
+      proxy: createDevProxyConfig(env.BASE_PATH, process.env.DEV_PROXY_TARGET || undefined),
     },
   };
 });

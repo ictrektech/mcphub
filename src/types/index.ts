@@ -449,6 +449,17 @@ export interface BearerKey {
   excludedServers?: string[]; // Excluded server names when accessType === 'exclude' (system keys only)
 }
 
+// A remote MCPHub instance managed from this hub (admin-only whitelist entry).
+export interface RemoteNodeConfig {
+  id: string; // Stable identifier used in API paths
+  name: string; // Display name
+  baseUrl: string; // Full base URL of the remote MCPHub, e.g. http://host:3000/app/com.ictrek.mcphub
+  token?: string; // Bearer token for the remote hub (server-side only)
+  profile?: string; // Hardware profile reported by V-Scheduler (amd-cpu / amd-cuda / ...)
+  enabled?: boolean; // Disabled entries are kept but not contacted
+  createdAt?: string;
+}
+
 // Represents the settings for MCP servers
 export interface McpSettings {
   users?: IUser[]; // Array of user credentials and permissions
@@ -463,6 +474,7 @@ export interface McpSettings {
   bearerKeys?: BearerKey[]; // Bearer authentication keys (multi-key configuration)
   prompts?: BuiltinPrompt[]; // Built-in configuration-driven prompt templates
   resources?: BuiltinResource[]; // Built-in configuration-driven static resources
+  remoteNodes?: RemoteNodeConfig[]; // Admin-managed whitelist of remote MCPHub instances
 }
 
 // Proxychains4 configuration for STDIO servers (Linux/macOS only)

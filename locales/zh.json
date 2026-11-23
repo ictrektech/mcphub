@@ -408,7 +408,8 @@
     "docs": "文档",
     "all": "全部",
     "loading": "加载中…",
-    "optional": "可选"
+    "optional": "可选",
+    "edit": "编辑"
   },
   "clientConfig": {
     "title": "复制 MCP 配置",
@@ -496,7 +497,8 @@
     "logs": "日志",
     "activity": "活动",
     "workspace": "工作区",
-    "system": "系统"
+    "system": "系统",
+    "remoteNodes": "远程节点"
   },
   "pages": {
     "dashboard": {
@@ -1656,5 +1658,54 @@
     "operationsTitle": "9. 运行与生命周期",
     "operationsText": "本地 stdio 命令只允许管理员部署，私有服务不是操作系统沙箱。VOS 镜像不挂载宿主 Docker socket，也不运行 Docker-in-Docker。管理和远程服务请选择 CPU profile；NVIDIA profile 仅开放设备与驱动，不会自动安装兼容的 CUDA 库。VOS 应用抽屉只有“服务管理”和本指南两个同级页面。 控制面板左上角显示已安装的 VOS 应用包版本。免认证接口 GET /app/com.ictrek.mcphub/config 的 data.version 返回同一版本。",
     "referenceTitle": "完整 API 参考"
+  },
+  "remoteNodes": {
+    "title": "远程节点管理",
+    "subtitle": "集中管理其他服务器上 MCPHub 的服务（仅管理员）",
+    "addTitle": "添加远程节点",
+    "editTitle": "编辑远程节点",
+    "name": "名称",
+    "baseUrl": "MCPHub 地址",
+    "token": "访问令牌",
+    "tokenKeep": "留空表示保留原令牌",
+    "profile": "硬件档位（可选）",
+    "enabled": "启用",
+    "disabled": "已停用",
+    "online": "已启用",
+    "tokenConfigured": "已配置令牌",
+    "noToken": "未配置令牌",
+    "empty": "还没有远程节点，先在上方添加一个。",
+    "loadFailed": "加载远程节点失败",
+    "saveFailed": "保存远程节点失败",
+    "deleteFailed": "删除失败",
+    "discoverFailed": "发现服务失败",
+    "operationFailed": "操作失败",
+    "added": "远程节点已添加",
+    "updated": "远程节点已更新",
+    "removed": "远程节点已删除",
+    "discover": "发现服务",
+    "serverName": "服务名称",
+    "visibility": "可见性",
+    "status": "状态",
+    "actions": "操作",
+    "noServers": "该节点没有可发现的服务",
+    "start": "启动",
+    "stop": "停止",
+    "confirmRemove": "确定删除远程节点「{{name}}」？",
+    "confirmRemoveServer": "确定删除服务「{{name}}」？",
+    "syncTitle": "从 V-Scheduler 同步节点",
+    "syncHint": "自动拉取 V-Scheduler 里的节点清单（地址 + 硬件 profile），勾选后导入白名单",
+    "syncButton": "同步节点",
+    "syncFailed": "同步节点失败",
+    "noDiscovered": "V-Scheduler 里没有可发现的节点",
+    "alreadyManaged": "已在白名单",
+    "importTokenHint": "集成 token（与远端 MCPHub 的 MCPHUB_INTEGRATION_TOKEN 一致）",
+    "importButton": "导入选中节点",
+    "imported": "已导入 {{count}} 个节点",
+    "importFailed": "导入失败",
+    "tokenRequired": "请先填写集成 token",
+    "registerLocal": "接入到本地",
+    "registered": "已把 {{count}} 个服务接入「{{node}}」，并按节点分组",
+    "registerFailed": "接入失败"
   }
 }
