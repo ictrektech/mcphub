@@ -215,6 +215,9 @@ export interface ServerConfig {
   credentialTemplate?: CredentialSlot[];
   type?: 'stdio' | 'sse' | 'streamable-http' | 'openapi';
   description?: string;
+  nodeId?: string;
+  nodeName?: string;
+  nodeProfile?: string;
   url?: string;
   command?: string;
   args?: string[];

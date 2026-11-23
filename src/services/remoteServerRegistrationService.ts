@@ -57,6 +57,9 @@ export const registerRemoteServer = async (
       enabled: true,
       visibility: 'public',
       owner: 'admin',
+      nodeId: input.nodeId,
+      nodeName: input.nodeName,
+      nodeProfile: input.profile,
       description: `远端节点 ${input.nodeName}${input.profile ? ` (${input.profile})` : ''} 的 ${input.name}`,
     };
     const ok = await serverDao.create({ name: localName, ...config });

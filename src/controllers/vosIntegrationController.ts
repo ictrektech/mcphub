@@ -52,6 +52,14 @@ export async function vosDiscovery(req: Request, res: Response): Promise<void> {
       visibility: server.visibility ?? 'private',
       status: status.get(server.name)?.status ?? 'disconnected',
       mcp_path: `${config.basePath}/mcp/${encodeURIComponent(server.name)}`,
+      // Origin node metadata so callers (e.g. v-harness) can tell which machine
+      // a service lives on and avoid cross-node mis-invocation. Local servers
+      // have no nodeId and are implicitly this hub's own machine.
+      ...(server.nodeId ? {
+        node_id: server.nodeId,
+        node_name: server.nodeName ?? server.nodeId,
+        node_profile: server.nodeProfile,
+      } : {}),
     }));
   res.json({
     success: true,

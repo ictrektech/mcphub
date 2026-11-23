@@ -349,6 +349,33 @@ it('returns only authorized discovery metadata for users and application credent
   ]);
 });
 
+it('exposes origin node metadata in discovery so callers can distinguish remote services', async () => {
+  await authenticateVosToken('admin-token');
+  await getServerDao().create({
+    name: 'amap@orin-nx',
+    owner: 'admin',
+    visibility: 'public',
+    enabled: true,
+    type: 'streamable-http',
+    url: 'https://upstream.example.test/SECRET',
+    nodeId: 'node-orin-1',
+    nodeName: '192 orin nx',
+    nodeProfile: 'jetson-orin',
+  });
+  const res = await request(app)
+    .get('/api/integration/discovery')
+    .set('Authorization', 'Bearer admin-token');
+  expect(res.status).toBe(200);
+  const remote = res.body.data.servers.find((s: any) => s.name === 'amap@orin-nx');
+  expect(remote).toMatchObject({
+    node_id: 'node-orin-1',
+    node_name: '192 orin nx',
+    node_profile: 'jetson-orin',
+  });
+  // No config secrets leak through the new fields.
+  expect(res.text).not.toMatch(/SECRET|headers|Authorization/);
+});
+
 it('verifies VOS JWTs on the MCP transport instead of trusting their decoded claims', async () => {
   const payload = {
     jsonrpc: '2.0',
