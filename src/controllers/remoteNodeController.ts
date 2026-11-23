@@ -5,10 +5,23 @@ import {
   createRemoteNode,
   deleteRemoteNode,
   discoverNodesFromScheduler,
+  getRemoteNodeInternal,
   importDiscoveredNodes,
   listRemoteNodes,
   updateRemoteNode,
 } from '../services/remoteNodeService.js';
+import {
+  createRemoteServerBinding,
+  deleteRemoteServerBinding,
+  getRemoteServerBinding,
+  listRemoteServerBindings,
+} from '../services/remoteServerBindingService.js';
+import {
+  connectRemoteServer,
+  disconnectRemoteServer,
+  remoteServerLocalName,
+  removeRemoteServer,
+} from '../services/remoteServerRegistrationService.js';
 
 const fail = (res: Response, error: unknown): void => {
   if (error instanceof RemoteNodeError) {
@@ -87,6 +100,87 @@ export const importFromScheduler = async (req: Request, res: Response): Promise<
     const discovered = await discoverNodesFromScheduler();
     const imported = importDiscoveredNodes(ids, discovered);
     res.json({ success: true, data: imported });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+const audit = (req: Request, action: string, details: Record<string, unknown>): void => {
+  logger.info('[remote-nodes] audit', {
+    action,
+    user: (req as any).user?.username,
+    isAdmin: (req as any).user?.isAdmin === true,
+    ...details,
+  });
+};
+
+export const getRemoteServers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const node = getRemoteNodeInternal(req.params.id);
+    const { getServersInfo } = await import('../services/mcpService.js');
+    const infos = await getServersInfo();
+    const rows = listRemoteServerBindings(node.id).map((binding) => {
+      const upstreamName = binding.upstreamName ?? remoteServerLocalName(binding.serverName, node.name);
+      const info = infos.find((item) => item.name === upstreamName);
+      return {
+        ...binding,
+        upstreamName,
+        enabled: info?.enabled,
+        status: info?.status,
+        lastError: info ? info.error ?? undefined : binding.lastError,
+      };
+    });
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+export const addRemoteServer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, address } = req.body ?? {};
+    const binding = await createRemoteServerBinding({
+      schedulerNodeId: req.params.id,
+      serverName: name,
+      address,
+    });
+    audit(req, 'remote-server.register', { nodeId: req.params.id, serverName: binding.serverName });
+    res.json({ success: true, data: binding });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+export const toggleRemoteServerAccess = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { enabled } = req.body ?? {};
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ success: false, message: 'enabled must be a boolean' });
+      return;
+    }
+    getRemoteServerBinding(req.params.id, req.params.name);
+    if (enabled) {
+      const result = await connectRemoteServer(req.params.id, req.params.name);
+      audit(req, 'remote-server.connect', {
+        nodeId: req.params.id, serverName: req.params.name, upstreamName: result.serverName,
+      });
+      res.json({ success: true, data: result });
+    } else {
+      await disconnectRemoteServer(req.params.id, req.params.name);
+      audit(req, 'remote-server.disconnect', { nodeId: req.params.id, serverName: req.params.name });
+      res.json({ success: true, message: 'Remote server disconnected from the hub' });
+    }
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+export const removeRemoteServerBindingForNode = async (req: Request, res: Response): Promise<void> => {
+  try {
+    await removeRemoteServer(req.params.id, req.params.name);
+    deleteRemoteServerBinding(req.params.id, req.params.name);
+    audit(req, 'remote-server.remove', { nodeId: req.params.id, serverName: req.params.name });
+    res.json({ success: true, message: 'Remote server registration removed' });
   } catch (error) {
     fail(res, error);
   }

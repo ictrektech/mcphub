@@ -97,6 +97,12 @@ export const deleteRemoteNode = (id: string): void => {
   writeNodes(nodes.filter((node) => node.id !== id));
 };
 
+export const getRemoteNodeInternal = (id: string): RemoteNodeConfig => {
+  const node = findNode(id);
+  if (!node) throw new RemoteNodeError(`Remote node '${id}' not found`, 404);
+  return node;
+};
+
 /** Pull the SSH compute node inventory from V-Scheduler (submitter view). */
 export const discoverNodesFromScheduler = async (): Promise<DiscoveredNodeView[]> => {
   if (!SCHEDULER_TOKEN) {

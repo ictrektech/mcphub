@@ -30,6 +30,20 @@ interface DiscoveredNode {
   alreadyManaged: boolean;
 }
 
+interface RemoteServer {
+  id: string;
+  serverName: string;
+  schedulerNodeId: string;
+  address: string;
+  profile?: string;
+  upstreamName?: string;
+  reachable?: boolean;
+  lastCheckedAt?: string;
+  lastError?: string;
+  enabled?: boolean;
+  status?: string;
+}
+
 interface ApiResult<T> {
   success: boolean;
   data?: T;
@@ -39,6 +53,8 @@ interface ApiResult<T> {
 const emptyForm = {
   id: '', name: '', address: '', hostname: '', arch: '', gpuModel: '', profile: '', enabled: true,
 };
+
+const emptyServerForm = { name: '', address: '' };
 
 const RemoteNodesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -52,6 +68,9 @@ const RemoteNodesPage: React.FC = () => {
   const [discovered, setDiscovered] = useState<DiscoveredNode[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [servers, setServers] = useState<Record<string, RemoteServer[]>>({});
+  const [serverForms, setServerForms] = useState<Record<string, { name: string; address: string }>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +84,21 @@ const RemoteNodesPage: React.FC = () => {
   useEffect(() => {
     if (auth.user?.isAdmin) void load();
   }, [auth.user?.isAdmin, load]);
+
+  const loadServers = useCallback(async (nodeId: string) => {
+    const result = await apiGet<ApiResult<RemoteServer[]>>(`/remote-nodes/${encodeURIComponent(nodeId)}/servers`);
+    if (result.success && result.data) {
+      setServers((current) => ({ ...current, [nodeId]: result.data! }));
+    } else {
+      setError(result.message ?? t('remoteNodes.servicesLoadFailed'));
+    }
+  }, [t]);
+
+  const toggleExpanded = (nodeId: string) => {
+    const next = !expanded[nodeId];
+    setExpanded((current) => ({ ...current, [nodeId]: next }));
+    if (next) void loadServers(nodeId);
+  };
 
   if (!auth.user?.isAdmin) {
     return <div className="hub-card p-6 text-center" style={{ color: 'var(--hub-err)' }}>{t('users.adminRequired')}</div>;
@@ -160,6 +194,54 @@ const RemoteNodesPage: React.FC = () => {
 
   const toggleSelected = (id: string) => {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  };
+
+  const registerServer = async (node: RemoteNode) => {
+    const formValue = serverForms[node.id] ?? emptyServerForm;
+    setError('');
+    setNotice('');
+    const result = await apiPost<ApiResult<RemoteServer>>(`/remote-nodes/${encodeURIComponent(node.id)}/servers`, {
+      name: formValue.name.trim(),
+      address: formValue.address.trim(),
+    });
+    if (result.success) {
+      setNotice(t('remoteNodes.serviceAdded'));
+      setServerForms((current) => ({ ...current, [node.id]: { ...emptyServerForm } }));
+      await loadServers(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.serviceSaveFailed'));
+    }
+  };
+
+  const toggleServer = async (node: RemoteNode, server: RemoteServer, enabled: boolean) => {
+    if (!enabled && !window.confirm(t('remoteNodes.confirmDisconnect', { name: server.serverName }))) return;
+    setError('');
+    setNotice('');
+    const result = await apiPost<ApiResult<unknown>>(
+      `/remote-nodes/${encodeURIComponent(node.id)}/servers/${encodeURIComponent(server.serverName)}/toggle`,
+      { enabled },
+    );
+    if (result.success) {
+      setNotice(enabled ? t('remoteNodes.serviceConnected') : t('remoteNodes.serviceDisconnected'));
+      await loadServers(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.serviceToggleFailed'));
+    }
+  };
+
+  const removeServer = async (node: RemoteNode, server: RemoteServer) => {
+    if (!window.confirm(t('remoteNodes.confirmRemoveService', { name: server.serverName }))) return;
+    setError('');
+    setNotice('');
+    const result = await apiDelete<ApiResult<void>>(
+      `/remote-nodes/${encodeURIComponent(node.id)}/servers/${encodeURIComponent(server.serverName)}`,
+    );
+    if (result.success) {
+      setNotice(t('remoteNodes.serviceRemoved'));
+      await loadServers(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.serviceDeleteFailed'));
+    }
   };
 
   const field = (key: keyof typeof form, label: string, placeholder?: string) => (
@@ -267,6 +349,72 @@ const RemoteNodesPage: React.FC = () => {
                 {node.enabled === false && <span className="hub-badge">{t('remoteNodes.disabled')}</span>}
               </div>
               {node.lastCheckedAt && <div className="hub-sub mt-2">{t('remoteNodes.lastCheckedAt')}: {node.lastCheckedAt}</div>}
+
+              <button className="hub-btn sm mt-3" onClick={() => toggleExpanded(node.id)}>
+                {expanded[node.id] ? t('remoteNodes.hideServices') : t('remoteNodes.manageServices')}
+              </button>
+              {expanded[node.id] && (
+                <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--hub-border)' }}>
+                  <h3 className="text-[13px] font-medium mb-2">{t('remoteNodes.services')}</h3>
+                  {(servers[node.id] ?? []).length === 0 ? (
+                    <p className="hub-sub">{t('remoteNodes.servicesEmpty')}</p>
+                  ) : (
+                    <div className="flex flex-col gap-2 mb-3">
+                      {(servers[node.id] ?? []).map((server) => (
+                        <div key={server.id} className="flex items-center justify-between gap-2 text-[12px]">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{server.serverName}</div>
+                            <div className="hub-sub truncate" title={server.address}>{server.address}</div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {server.upstreamName && <span className="hub-badge">{server.upstreamName}</span>}
+                              {server.status && <span className="hub-badge">{server.status}</span>}
+                              <span className="hub-badge">
+                                {server.reachable === false ? t('remoteNodes.serviceUnreachable') : t('remoteNodes.serviceReachable')}
+                              </span>
+                            </div>
+                            {server.lastError && <div style={{ color: 'var(--hub-err)' }}>{server.lastError}</div>}
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              className="hub-btn sm"
+                              onClick={() => void toggleServer(node, server, !server.enabled)}
+                            >
+                              {server.enabled ? t('remoteNodes.disconnect') : t('remoteNodes.connect')}
+                            </button>
+                            <button className="hub-btn sm" onClick={() => void removeServer(node, server)}>
+                              {t('common.delete')}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col md:flex-row gap-2">
+                    <input
+                      className="hub-input flex-1"
+                      placeholder={t('remoteNodes.serviceName')}
+                      value={(serverForms[node.id] ?? emptyServerForm).name}
+                      onChange={(event) => setServerForms((current) => ({
+                        ...current,
+                        [node.id]: { ...(current[node.id] ?? emptyServerForm), name: event.target.value },
+                      }))}
+                    />
+                    <input
+                      className="hub-input flex-1"
+                      placeholder={t('remoteNodes.serviceAddressHint')}
+                      value={(serverForms[node.id] ?? emptyServerForm).address}
+                      onChange={(event) => setServerForms((current) => ({
+                        ...current,
+                        [node.id]: { ...(current[node.id] ?? emptyServerForm), address: event.target.value },
+                      }))}
+                    />
+                    <button className="hub-btn primary" onClick={() => void registerServer(node)}>
+                      {t('remoteNodes.registerService')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
           ))}
         </div>

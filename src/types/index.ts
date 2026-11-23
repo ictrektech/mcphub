@@ -468,6 +468,26 @@ export interface RemoteNodeConfig {
   createdAt?: string;
 }
 
+// A service registered under a whitelisted SSH compute node (P1).
+// The node only provides the address; the service process is managed elsewhere.
+export interface RemoteServerBinding {
+  id: string;
+  serverName: string; // Name registered by admin; upstream is <serverName>@<node>
+  schedulerNodeId: string;
+  address: string; // Full MCP URL including path, e.g. http://10.0.0.1:8080/mcp
+  profile?: string; // Node profile at registration time (read-only echo)
+  upstreamName?: string; // Fixed once connected so renames do not break routing
+  reachable?: boolean;
+  lastCheckedAt?: string;
+  lastError?: string;
+  createdAt: string;
+}
+
+export interface RemoteServerBindingView extends RemoteServerBinding {
+  enabled?: boolean; // Derived from the upstream ServerConfig
+  status?: string; // Derived from runtime server info when available
+}
+
 // Represents the settings for MCP servers
 export interface McpSettings {
   users?: IUser[]; // Array of user credentials and permissions
@@ -483,6 +503,7 @@ export interface McpSettings {
   prompts?: BuiltinPrompt[]; // Built-in configuration-driven prompt templates
   resources?: BuiltinResource[]; // Built-in configuration-driven static resources
   remoteNodes?: RemoteNodeConfig[]; // Admin-managed SSH compute node whitelist
+  remoteServerBindings?: RemoteServerBinding[]; // Services registered under those nodes
 }
 
 // Proxychains4 configuration for STDIO servers (Linux/macOS only)
@@ -521,6 +542,10 @@ export interface ServerConfig {
   credentialTemplate?: CredentialSlot[]; // Metadata only; every slot requires a personal binding.
   type?: 'stdio' | 'sse' | 'streamable-http' | 'openapi'; // Type of server
   description?: string; // Optional server note/description for management UI
+  // Read-only origin metadata for servers registered from a managed SSH node.
+  nodeId?: string;
+  nodeName?: string;
+  nodeProfile?: string;
   url?: string; // URL for SSE or streamable HTTP servers
   command?: string; // Command to execute for stdio-based servers
   args?: string[]; // Arguments for the command

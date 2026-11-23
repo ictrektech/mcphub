@@ -95,9 +95,15 @@ interface RemoteServerBinding {
   schedulerNodeId: string; // 来源节点
   address: string;         // admin 登记的完整 URL，含 MCP 路径（如 http://1.2.3.4:8080/mcp），非仅 host:port
   profile?: string;        // 所属节点 profile（回显）
+  upstreamName?: string;   // 接入后固定，节点改名不影响路由
+  reachable?: boolean;     // 中心侧地址预检结果
+  lastCheckedAt?: string;
+  lastError?: string;
   createdAt: string;
 }
 ```
+
+接入/摘除复用 `mcpService.toggleServerStatus`：禁止时 `closeServer`、清空工具缓存并广播；恢复时由 `initializeClientsFromSettings` 在工具加载完成后广播。服务登记/切换/删除写结构化审计日志，前端摘除与删除要求二次确认。
 
 存量无绑定记录的服务行为不变；无需 migration。
 

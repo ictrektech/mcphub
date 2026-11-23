@@ -202,11 +202,15 @@ import {
 } from '../services/betterAuthConfig.js';
 import {
   addRemoteNode,
+  addRemoteServer,
   discoverFromScheduler,
   editRemoteNode,
   getRemoteNodes,
+  getRemoteServers,
   importFromScheduler,
   removeRemoteNode,
+  removeRemoteServerBindingForNode,
+  toggleRemoteServerAccess,
 } from '../controllers/remoteNodeController.js';
 import {
   authAttemptRateLimiter,
@@ -301,6 +305,18 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.post('/remote-nodes', requireAdminMiddleware, addRemoteNode);
   authenticatedRouter.put('/remote-nodes/:id', requireAdminMiddleware, editRemoteNode);
   authenticatedRouter.delete('/remote-nodes/:id', requireAdminMiddleware, removeRemoteNode);
+  authenticatedRouter.get('/remote-nodes/:id/servers', requireAdminMiddleware, getRemoteServers);
+  authenticatedRouter.post('/remote-nodes/:id/servers', requireAdminMiddleware, addRemoteServer);
+  authenticatedRouter.post(
+    '/remote-nodes/:id/servers/:name/toggle',
+    requireAdminMiddleware,
+    toggleRemoteServerAccess,
+  );
+  authenticatedRouter.delete(
+    '/remote-nodes/:id/servers/:name',
+    requireAdminMiddleware,
+    removeRemoteServerBindingForNode,
+  );
 
   authenticatedRouter.use(replicaConfiguration);
   // `authenticatedRouter` is mounted at the end of this function, after the public
