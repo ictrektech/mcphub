@@ -75,8 +75,8 @@ MCPHub 当前是单实例聚合网关：
 1. **节点自动发现（V-Scheduler）— 已实现**
    - 后端 `GET /api/remote-nodes/discover` 用服务端凭据调用 V-Scheduler `GET /api/v1/managed-nodes`。
    - 配置项（环境变量，服务端）：`MCPHUB_VSCHEDULER_URL`（默认 `http://v-scheduler:38120`）、`MCPHUB_VSCHEDULER_TOKEN`。**token 只在服务端，绝不下发浏览器。**
-   - 字段自动映射（无需手填）：`host → baseUrl`（`http://{host}:{MCPHUB_REMOTE_PORT}/app/com.ictrek.mcphub`，默认端口 3000，路径可由 `MCPHUB_REMOTE_PATH` 覆盖）、`profile`（优先 `profile`，退回 `detected_profile`）、`name / status / arch / gpu_model`。
-   - 宿主机端口可配置：各节点 compose 用 `MCPHUB_HOST_PORT` 发布（默认 3000，容器内部仍监听 3000）；中心用 `MCPHUB_REMOTE_PORT` 指向同一端口。这样 3000 被占用时可统一换端口，避免冲突。
+   - 字段自动映射（无需手填）：`host → baseUrl`（`http://{host}:{MCPHUB_REMOTE_PORT}/app/com.ictrek.mcphub`，默认端口 31888，路径可由 `MCPHUB_REMOTE_PATH` 覆盖）、`profile`（优先 `profile`，退回 `detected_profile`）、`name / status / arch / gpu_model`。
+   - 宿主机端口可配置：各节点 compose 用 `MCPHUB_HOST_PORT` 发布（**默认 31888**，因为 3000 常被占用；容器内部仍监听 3000）；中心用 `MCPHUB_REMOTE_PORT` 指向同一端口（默认 31888）。部署时如改端口，两边需保持一致。
    - 返回 `alreadyManaged` 标记已导入的节点，前端默认只勾选未导入的。
 2. **白名单导入 — 已实现**
    - 前端「从 V-Scheduler 同步节点」列出候选（带 profile、状态），admin 勾选并填集成 token，`POST /api/remote-nodes/import` 自动写入白名单（地址 + profile 都自动带过来）。

@@ -45,7 +45,7 @@ const SCHEDULER_TOKEN = process.env.MCPHUB_VSCHEDULER_TOKEN || '';
 // Path/port of a remote MCPHub behind the VOS gateway / direct port.
 // MCPHUB_REMOTE_PORT must match the remote node's MCPHUB_HOST_PORT.
 const REMOTE_MCPHUB_PATH = process.env.MCPHUB_REMOTE_PATH || '/app/com.ictrek.mcphub';
-const REMOTE_MCPHUB_PORT = process.env.MCPHUB_REMOTE_PORT || '3000';
+const REMOTE_MCPHUB_PORT = process.env.MCPHUB_REMOTE_PORT || '31888';
 
 const readNodes = (): RemoteNodeConfig[] => {
   const nodes = loadOriginalSettings().remoteNodes ?? [];

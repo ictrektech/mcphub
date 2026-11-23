@@ -5,7 +5,7 @@ import { registerAllTools } from './mcpService.js';
 import type { IGroup, ServerConfig } from '../types/index.js';
 
 const REMOTE_MCPHUB_PATH = process.env.MCPHUB_REMOTE_PATH || '/app/com.ictrek.mcphub';
-const REMOTE_MCPHUB_PORT = process.env.MCPHUB_REMOTE_PORT || '3000';
+const REMOTE_MCPHUB_PORT = process.env.MCPHUB_REMOTE_PORT || '31888';
 
 export interface RegisterableRemoteServer {
   name: string; // server name on the remote node

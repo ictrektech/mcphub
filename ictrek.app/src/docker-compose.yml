@@ -15,7 +15,7 @@ x-mcphub-env: &mcphub-env
   MCPHUB_VSCHEDULER_TOKEN: ${MCPHUB_VSCHEDULER_TOKEN:-}
   # Host port published for cross-node access (see ports below). The central
   # hub must set MCPHUB_REMOTE_PORT to the same value to build node URLs.
-  MCPHUB_HOST_PORT: ${MCPHUB_HOST_PORT:-3000}
+  MCPHUB_HOST_PORT: ${MCPHUB_HOST_PORT:-31888}
 
 x-mcphub-base: &mcphub-base
   restart: unless-stopped
@@ -24,11 +24,12 @@ x-mcphub-base: &mcphub-base
   security_opt: ['no-new-privileges:true']
   environment: *mcphub-env
   # Cross-node management: publish the dashboard/API port on the host so other
-  # MCPHub instances can reach this node's /mcp and /api directly. The host port
-  # is configurable (3000 is often taken by other apps); the container still
-  # listens on 3000. Traefik labels below keep the in-cluster route unchanged.
+  # MCPHub instances can reach this node's /mcp and /api directly. Default host
+  # port is 31888 because 3000 is commonly taken; the container still listens
+  # on 3000. Override with MCPHUB_HOST_PORT; the central hub must set
+  # MCPHUB_REMOTE_PORT to the same value.
   ports:
-    - '${MCPHUB_HOST_PORT:-3000}:3000'
+    - '${MCPHUB_HOST_PORT:-31888}:3000'
   volumes:
     - ${VOS_APP_STORAGE_PATH}/data:/app/data
   networks:
