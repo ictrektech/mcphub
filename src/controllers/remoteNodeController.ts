@@ -23,6 +23,14 @@ import {
   removeRemoteServer,
 } from '../services/remoteServerRegistrationService.js';
 
+/** VOS dashboard requests carry the user token in x-vos-token; accept Bearer too. */
+const vosTokenFromRequest = (req: Request): string => {
+  const direct = req.header('x-vos-token');
+  if (direct?.trim()) return direct.trim();
+  const bearer = req.header('authorization');
+  return bearer?.startsWith('Bearer ') ? bearer.slice(7).trim() : '';
+};
+
 const fail = (res: Response, error: unknown): void => {
   if (error instanceof RemoteNodeError) {
     res.status(error.status).json({ success: false, message: error.message });
@@ -81,9 +89,9 @@ export const removeRemoteNode = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const discoverFromScheduler = async (_req: Request, res: Response): Promise<void> => {
+export const discoverFromScheduler = async (req: Request, res: Response): Promise<void> => {
   try {
-    res.json({ success: true, data: await discoverNodesFromScheduler() });
+    res.json({ success: true, data: await discoverNodesFromScheduler(vosTokenFromRequest(req)) });
   } catch (error) {
     fail(res, error);
   }
@@ -97,7 +105,7 @@ export const importFromScheduler = async (req: Request, res: Response): Promise<
       return;
     }
     // Re-query the scheduler so clients cannot inject node metadata at import time.
-    const discovered = await discoverNodesFromScheduler();
+    const discovered = await discoverNodesFromScheduler(vosTokenFromRequest(req));
     const imported = importDiscoveredNodes(ids, discovered);
     res.json({ success: true, data: imported });
   } catch (error) {

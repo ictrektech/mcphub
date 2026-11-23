@@ -55,17 +55,24 @@ mcphub 与节点的关系只有一条：**知道节点存在（v-scheduler 告�
 
 | 端点 | 用途 | 凭据 |
 |---|---|---|
-| `GET /managed-nodes` | 节点清单（脱敏：id/name/status/**address/hostname**/arch/gpu_model/profile/compatible_profiles；无 `host` 字段） | mcphub 服务凭据（submitter） |
+| `GET /managed-nodes` | 节点清单（脱敏：id/name/status/**address/hostname**/arch/gpu_model/profile/compatible_profiles；无 `host` 字段） | **当前登录用户的 VOS token**（转发请求头） |
 | `GET /managed-nodes?profile=x` | 按档位筛节点（compatible 语义由平台保证） | 同上 |
 
-- 凭据：管理员在 v-scheduler「节点管理 → 服务凭据」为 mcphub 创建，`MCPHUB_VSCHEDULER_TOKEN` 配置，仅服务端保存。
-- 基址：VOS 下 `http://<vos-host>:22888/scheduler/api/v1`（容器内 `http://v-scheduler:38120/api/v1`）。
+### 3.1 凭据模式（2026-11-23 定稿：用户 token 转发，与 v-harness/v-office 同款）
 
-### 3.3 可选增强（不阻塞）：从台账只读获取服务地址
+静态服务凭据方案（`MCPHUB_VSCHEDULER_TOKEN`）**废弃**。采用平台既有模式（源码依据：v-harness `gateway/scheduler.mjs` 注释 "VOS bearer tokens remain in the gateway / management credentials are never used"；v-office `ictrek.app/src/docker-compose.yml`）：
 
-若不想手工登记地址，可后续只读 `GET /backend-deployments`，从台账提取服务的 endpoint 回填绑定记录。**凭据口径**：`MCPHUB_VSCHEDULER_TOKEN` 若配置为 submitter，只能读到 mcphub 自己 app_id 的台账；要看全量需**另配** `MCPHUB_VSCHEDULER_ADMIN_TOKEN`（admin principal），未配置则自动降级为自己 app_id 口径。该接口属 v-scheduler 0.0.120 新增的部署生命周期 API——**mcphub 只读消费，不调用其部署/启停端点**。是否启用等 P1 落地后看登记体验再定。
+1. **应用包声明依赖**：`ictrek.app/src/manifest.yml` 加 `dependencies.apps: - id: com.ictrek.v-scheduler`，VOS 保证两应用同容器网络；
+2. **地址写死 compose**：`V_SCHEDULER_URL: ${V_SCHEDULER_URL:-http://v-scheduler:8080}`（容器网络直连）；
+3. **凭据 = 当前登录用户的 VOS token**：VOS 模式下浏览器请求头本就携带用户 token，mcphub 后端转发给 v-scheduler 即可——v-scheduler 对已登录 VOS 用户放行脱敏节点清单（`identity::verified_account`）。
 
-### 3.4 明确不做
+效果：admin 打开页面点"同步"→ 后端取当前请求的 `x-vos-token`（VOS 前端实际发出的头；兼容 `Authorization: Bearer`）并转发给 v-scheduler → 返回节点清单。**零凭据创建、零管理员操作、零静态密钥保管**。代码侧：`discoverNodesFromScheduler(userToken)` 由控制器传入；未登录/非 admin 已被路由层拦截。请求路径统一为 `{V_SCHEDULER_URL}/scheduler/api/v1/managed-nodes`，该路径在 8080 网关与 38120 controller 上均可用。
+
+### 3.2 可选增强（不阻塞）：从台账只读获取服务地址
+
+若不想手工登记地址，可后续只读 `GET /backend-deployments`，从台账提取服务的 endpoint 回填绑定记录。该接口不是 `managed-nodes` 的公开只读视图：VOS 普通用户 token 无法读取台账，管理员 token 才能读全量，submitter 服务凭据只能读自身 `app_id`。若启用此增强，需要单独确定凭据口径（另配 admin/submitter 凭据或与运维约定）；本期不做。该接口属 v-scheduler 0.0.120 新增的部署生命周期 API——**mcphub 只读消费，不调用其部署/启停端点**。
+
+### 3.3 明确不做
 
 - ~~部署容器 / backend-deployments 写操作~~（边界 1）
 - ~~容器 start/stop~~（边界 3：启停仅指中心侧开关）
@@ -76,6 +83,8 @@ mcphub 与节点的关系只有一条：**知道节点存在（v-scheduler 告�
 
 | 层 | 位置 | 改动 |
 |---|---|---|
+| 应用包 | `ictrek.app/src/manifest.yml` | 加 `dependencies.apps: - id: com.ictrek.v-scheduler`（§3.1） |
+| 应用包 | `ictrek.app/src/docker-compose.yml` | 加 `V_SCHEDULER_URL: ${V_SCHEDULER_URL:-http://v-scheduler:8080}` |
 | 类型 | `src/types/index.ts` | `RemoteNodeConfig` 改为算力节点语义：去 `baseUrl/token`，加 `schedulerNodeId/address/profile/arch/gpuModel` |
 | 节点服务 | `src/services/remoteNodeService.ts` | `discoverNodesFromScheduler` 去掉 MCPHub baseUrl 拼接、地址字段改 `address ?? hostname ?? host`（已修）；新增服务登记/绑定管理；登记地址的可达性检查 |
 | 上游注册 | `src/services/remoteServerRegistrationService.ts` | 上游 URL 取登记地址；命名/分组保留；`enabled` 开关复用 `mcpService` 现有 toggle |
@@ -119,7 +128,7 @@ interface RemoteServerBinding {
 
 ## 7. 实施计划
 
-- **P0（1-2 天，零外部依赖）**：节点语义改造（地址字段 `address ?? hostname`）+ 发现接口对接 + 白名单 UI + 服务表隐藏。验收：中心用 submitter 凭据列出 SSH 节点，白名单生效。
+- **P0（1-2 天）**：节点语义改造（地址字段 `address ?? hostname`）+ V-Scheduler 应用依赖与 compose 地址 + 发现接口对接（用户 token 转发，§3.1）+ 白名单 UI + 服务表隐藏。验收：admin 在 VOS 环境打开页面能列出 SSH 节点，白名单生效。
 - **P1（1-2 天）**：服务登记 + 登记地址可达性检查 + 接入/摘除（上游注册 + enabled 开关）。验收：登记节点上的 MCP server 地址后，中心可调用其工具、可摘除恢复；不可达明确报错。
 - **P2（另评）**：profile 算力调度（依赖上游 501 契约）；可选的台账只读回填（§3.3）。
 

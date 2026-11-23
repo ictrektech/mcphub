@@ -32,8 +32,13 @@ export interface DiscoveredNodeView {
 export type RemoteNodeView = RemoteNodeConfig;
 
 // V-Scheduler discovery configuration (server-side only).
-const SCHEDULER_URL = (process.env.MCPHUB_VSCHEDULER_URL || 'http://localhost:38120').replace(/\/+$/, '');
-const SCHEDULER_TOKEN = process.env.MCPHUB_VSCHEDULER_TOKEN || '';
+// The unified container exposes the controller at 38120 and the gateway at 8080;
+// /scheduler/api/v1 works on both, so use one path for every deployment.
+const SCHEDULER_URL = (
+  process.env.V_SCHEDULER_URL
+  || process.env.MCPHUB_VSCHEDULER_URL
+  || 'http://v-scheduler:8080'
+).replace(/\/+$/, '');
 
 const readNodes = (): RemoteNodeConfig[] => {
   const nodes = loadOriginalSettings().remoteNodes ?? [];
@@ -103,15 +108,16 @@ export const getRemoteNodeInternal = (id: string): RemoteNodeConfig => {
   return node;
 };
 
-/** Pull the SSH compute node inventory from V-Scheduler (submitter view). */
-export const discoverNodesFromScheduler = async (): Promise<DiscoveredNodeView[]> => {
-  if (!SCHEDULER_TOKEN) {
-    throw new RemoteNodeError('MCPHUB_VSCHEDULER_TOKEN is not configured', 503);
+/** Pull the SSH compute node inventory with the current user's VOS token. */
+export const discoverNodesFromScheduler = async (userToken: string): Promise<DiscoveredNodeView[]> => {
+  const token = userToken?.trim();
+  if (!token) {
+    throw new RemoteNodeError('VOS user token is required for V-Scheduler discovery', 401);
   }
   let response: Response;
   try {
-    response = await fetch(`${SCHEDULER_URL}/api/v1/managed-nodes`, {
-      headers: { authorization: `Bearer ${SCHEDULER_TOKEN}` },
+    response = await fetch(`${SCHEDULER_URL}/scheduler/api/v1/managed-nodes`, {
+      headers: { authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {

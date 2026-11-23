@@ -10,6 +10,11 @@ version: __APP_VERSION__
 author: ictrek
 category:
   - ai
+dependencies:
+  apps:
+    - id: com.ictrek.v-scheduler
+      version: '*'
+      optional: false
 icon: icon.png
 arch:
   - amd64

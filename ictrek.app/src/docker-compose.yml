@@ -5,6 +5,7 @@ x-mcphub-env: &mcphub-env
   VOS_AUTH_ENABLED: 'true'
   MCPHUB_VOS_VERSION: '__APP_VERSION__'
   VOS_USERINFO_URL: http://${VOS_HOST_GW_IP}:${VOS_API_GW_PORT_INTERNAL}/v1000/oauth2/userinfo
+  V_SCHEDULER_URL: ${V_SCHEDULER_URL:-http://v-scheduler:8080}
   USE_DB: 'false'
   MCPHUB_SETTING_PATH: /app/data/mcp_settings.json
 

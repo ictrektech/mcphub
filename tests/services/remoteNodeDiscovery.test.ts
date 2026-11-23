@@ -1,6 +1,6 @@
-// Set before importing the service: scheduler config is read at module load.
-process.env.MCPHUB_VSCHEDULER_URL = 'http://scheduler:38120/';
-process.env.MCPHUB_VSCHEDULER_TOKEN = 'submitter-token';
+// Set before importing the service: scheduler URL is read at module load.
+process.env.V_SCHEDULER_URL = 'http://scheduler:8080/';
+delete process.env.MCPHUB_VSCHEDULER_TOKEN;
 
 const mockSettings: { value: any } = { value: { mcpServers: {} } };
 
@@ -46,37 +46,40 @@ const schedulerPayload = {
   },
 };
 
+const USER_TOKEN = 'vos-user-token';
+
 describe('V-Scheduler compute node discovery (P0)', () => {
-  const originalUrl = process.env.MCPHUB_VSCHEDULER_URL;
-  const originalToken = process.env.MCPHUB_VSCHEDULER_TOKEN;
+  const originalUrl = process.env.V_SCHEDULER_URL;
 
   beforeAll(() => {
-    process.env.MCPHUB_VSCHEDULER_URL = 'http://scheduler:38120/';
-    process.env.MCPHUB_VSCHEDULER_TOKEN = 'submitter-token';
+    process.env.V_SCHEDULER_URL = 'http://scheduler:8080/';
   });
   afterAll(() => {
-    if (originalUrl === undefined) delete process.env.MCPHUB_VSCHEDULER_URL;
-    else process.env.MCPHUB_VSCHEDULER_URL = originalUrl;
-    if (originalToken === undefined) delete process.env.MCPHUB_VSCHEDULER_TOKEN;
-    else process.env.MCPHUB_VSCHEDULER_TOKEN = originalToken;
+    if (originalUrl === undefined) delete process.env.V_SCHEDULER_URL;
+    else process.env.V_SCHEDULER_URL = originalUrl;
   });
   beforeEach(() => {
     mockSettings.value = { mcpServers: {} };
     mockFetch.mockReset();
   });
 
-  it('surfaces scheduler HTTP errors', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
-    await expect(discoverNodesFromScheduler()).rejects.toThrow(/HTTP 401/);
+  it('requires the current user VOS token', async () => {
+    await expect(discoverNodesFromScheduler('')).rejects.toThrow(/VOS user token is required/);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('maps submitter address/hostname and skips addressless rows', async () => {
+  it('surfaces scheduler HTTP errors', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+    await expect(discoverNodesFromScheduler(USER_TOKEN)).rejects.toThrow(/HTTP 401/);
+  });
+
+  it('maps submitter address/hostname and forwards the user token', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: () => Promise.resolve(schedulerPayload),
     });
-    const nodes = await discoverNodesFromScheduler();
+    const nodes = await discoverNodesFromScheduler(USER_TOKEN);
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({
       id: 'node-orin',
@@ -92,8 +95,8 @@ describe('V-Scheduler compute node discovery (P0)', () => {
     });
     expect(nodes[0]).not.toHaveProperty('baseUrl');
     const [url, init] = mockFetch.mock.calls[0];
-    expect(url).toBe('http://scheduler:38120/api/v1/managed-nodes');
-    expect(init.headers.authorization).toBe('Bearer submitter-token');
+    expect(url).toBe('http://scheduler:8080/scheduler/api/v1/managed-nodes');
+    expect(init.headers.authorization).toBe(`Bearer ${USER_TOKEN}`);
   });
 
   it('imports selected nodes into the whitelist without credentials', () => {
@@ -132,7 +135,7 @@ describe('V-Scheduler compute node discovery (P0)', () => {
     importDiscoveredNodes(['node-orin'], [{
       id: 'node-orin', schedulerNodeId: 'node-orin', name: 'Orin', address: '10.144.144.192', alreadyManaged: false,
     }]);
-    const nodes = await discoverNodesFromScheduler();
+    const nodes = await discoverNodesFromScheduler(USER_TOKEN);
     expect(nodes[0].alreadyManaged).toBe(true);
   });
 });
