@@ -201,6 +201,14 @@ import {
   setMountedSsoProviders,
 } from '../services/betterAuthConfig.js';
 import {
+  addRemoteNode,
+  discoverFromScheduler,
+  editRemoteNode,
+  getRemoteNodes,
+  importFromScheduler,
+  removeRemoteNode,
+} from '../controllers/remoteNodeController.js';
+import {
   authAttemptRateLimiter,
   authRegistrationRateLimiter,
   authenticatedRouteRateLimiter,
@@ -285,6 +293,15 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     if (!isReplicaMode()) { res.sendStatus(404); return; }
     res.json({ success: true, data: replicaStatus() });
   });
+
+  // Admin-only SSH compute node whitelist (discovery + manual CRUD).
+  authenticatedRouter.get('/remote-nodes/discover', requireAdminMiddleware, discoverFromScheduler);
+  authenticatedRouter.post('/remote-nodes/import', requireAdminMiddleware, importFromScheduler);
+  authenticatedRouter.get('/remote-nodes', requireAdminMiddleware, getRemoteNodes);
+  authenticatedRouter.post('/remote-nodes', requireAdminMiddleware, addRemoteNode);
+  authenticatedRouter.put('/remote-nodes/:id', requireAdminMiddleware, editRemoteNode);
+  authenticatedRouter.delete('/remote-nodes/:id', requireAdminMiddleware, removeRemoteNode);
+
   authenticatedRouter.use(replicaConfiguration);
   // `authenticatedRouter` is mounted at the end of this function, after the public
   // routes below have been registered on `router`. The order matters: the limiter

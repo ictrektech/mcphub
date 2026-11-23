@@ -370,6 +370,7 @@
     "update": "Update",
     "updating": "Updating...",
     "submitting": "Submitting...",
+    "edit": "Edit",
     "delete": "Delete",
     "remove": "Remove",
     "copy": "Copy",
@@ -496,7 +497,8 @@
     "logs": "Logs",
     "activity": "Activity",
     "workspace": "Workspace",
-    "system": "System"
+    "system": "System",
+    "remoteNodes": "Remote Nodes"
   },
   "pages": {
     "dashboard": {
@@ -524,6 +526,9 @@
     },
     "users": {
       "title": "User Management"
+    },
+    "remoteNodes": {
+      "title": "Compute Nodes"
     },
     "settings": {
       "title": "Settings",
@@ -1630,6 +1635,39 @@
     "compressionSearch": "Search results",
     "compressionDiff": "Diffs",
     "compressionText": "Text"
+  },
+  "remoteNodes": {
+    "subtitle": "V-Scheduler SSH compute nodes admitted to the admin whitelist",
+    "discover": "Discover from V-Scheduler",
+    "discovering": "Discovering...",
+    "discovered": "Discovered nodes",
+    "discoveredEmpty": "No nodes returned by V-Scheduler.",
+    "importSelected": "Import selected ({{count}})",
+    "importFailed": "Failed to import selected nodes",
+    "alreadyManaged": "Already managed",
+    "addTitle": "Add compute node",
+    "editTitle": "Edit compute node",
+    "id": "Node ID",
+    "idHint": "Stable local identifier",
+    "name": "Name",
+    "address": "Address",
+    "hostname": "Hostname",
+    "arch": "Architecture",
+    "gpuModel": "GPU model",
+    "profile": "Profile",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "lastCheckedAt": "Last checked",
+    "empty": "No compute nodes in the whitelist yet. Discover or add one above.",
+    "loadFailed": "Failed to load compute nodes",
+    "saveFailed": "Failed to save compute node",
+    "deleteFailed": "Failed to delete compute node",
+    "syncFailed": "Failed to discover nodes from V-Scheduler",
+    "added": "Compute node added",
+    "updated": "Compute node updated",
+    "removed": "Compute node removed",
+    "imported": "Imported {{count}} compute nodes",
+    "confirmRemove": "Remove '{{name}}' from the whitelist?"
   },
   "guide": {
     "title": "API Integration Guide",

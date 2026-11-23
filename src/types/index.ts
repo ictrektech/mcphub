@@ -449,6 +449,25 @@ export interface BearerKey {
   excludedServers?: string[]; // Excluded server names when accessType === 'exclude' (system keys only)
 }
 
+// A V-Scheduler SSH compute node admitted to the admin whitelist.
+// The node itself has no MCPHub instance; services on it are registered separately.
+export interface RemoteNodeConfig {
+  id: string; // Stable local identifier used in API paths
+  name: string; // Display name
+  schedulerNodeId?: string; // Node id reported by V-Scheduler
+  address?: string; // IPv4 reported by V-Scheduler
+  hostname?: string; // Optional hostname reported by V-Scheduler
+  arch?: string;
+  gpuModel?: string;
+  profile?: string; // Hardware profile (amd-cpu / amd-cuda / ...)
+  status?: string; // V-Scheduler node status
+  detectedProfile?: string;
+  compatibleProfiles?: string[];
+  lastCheckedAt?: string;
+  enabled?: boolean; // Disabled entries are kept but hidden from discovery
+  createdAt?: string;
+}
+
 // Represents the settings for MCP servers
 export interface McpSettings {
   users?: IUser[]; // Array of user credentials and permissions
@@ -463,6 +482,7 @@ export interface McpSettings {
   bearerKeys?: BearerKey[]; // Bearer authentication keys (multi-key configuration)
   prompts?: BuiltinPrompt[]; // Built-in configuration-driven prompt templates
   resources?: BuiltinResource[]; // Built-in configuration-driven static resources
+  remoteNodes?: RemoteNodeConfig[]; // Admin-managed SSH compute node whitelist
 }
 
 // Proxychains4 configuration for STDIO servers (Linux/macOS only)

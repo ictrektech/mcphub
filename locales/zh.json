@@ -370,6 +370,7 @@
     "update": "更新",
     "updating": "更新中...",
     "submitting": "提交中...",
+    "edit": "编辑",
     "delete": "删除",
     "remove": "移除",
     "copy": "复制",
@@ -496,7 +497,8 @@
     "logs": "日志",
     "activity": "活动",
     "workspace": "工作区",
-    "system": "系统"
+    "system": "系统",
+    "remoteNodes": "算力节点"
   },
   "pages": {
     "dashboard": {
@@ -535,6 +537,9 @@
     },
     "users": {
       "title": "用户管理"
+    },
+    "remoteNodes": {
+      "title": "算力节点"
     },
     "market": {
       "title": "市场中心 - 本地市场和云端市场"
@@ -1630,6 +1635,39 @@
     "compressionSearch": "搜索结果",
     "compressionDiff": "差异",
     "compressionText": "文本"
+  },
+  "remoteNodes": {
+    "subtitle": "已纳入管理员白名单的 V-Scheduler SSH 算力节点",
+    "discover": "从 V-Scheduler 发现",
+    "discovering": "发现中...",
+    "discovered": "发现的节点",
+    "discoveredEmpty": "V-Scheduler 未返回节点。",
+    "importSelected": "导入所选（{{count}}）",
+    "importFailed": "导入所选节点失败",
+    "alreadyManaged": "已纳管",
+    "addTitle": "添加算力节点",
+    "editTitle": "编辑算力节点",
+    "id": "节点 ID",
+    "idHint": "稳定的本地标识",
+    "name": "名称",
+    "address": "地址",
+    "hostname": "主机名",
+    "arch": "架构",
+    "gpuModel": "GPU 型号",
+    "profile": "档位",
+    "enabled": "启用",
+    "disabled": "已停用",
+    "lastCheckedAt": "最后检查时间",
+    "empty": "白名单里还没有算力节点，可先在上方发现或手工添加。",
+    "loadFailed": "加载算力节点失败",
+    "saveFailed": "保存算力节点失败",
+    "deleteFailed": "删除算力节点失败",
+    "syncFailed": "从 V-Scheduler 发现节点失败",
+    "added": "算力节点已添加",
+    "updated": "算力节点已更新",
+    "removed": "算力节点已移除",
+    "imported": "已导入 {{count}} 个算力节点",
+    "confirmRemove": "确认从白名单移除“{{name}}”？"
   },
   "guide": {
     "title": "API 集成指南",
