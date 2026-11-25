@@ -87,7 +87,7 @@ jobs:
             -F "package=@$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" -F force=true \
             http://127.0.0.1:18899/api/appstore/apps > "$HOME/dev/build/mcphub/publish-result.json"
           python3 - <<'PY'
-          import json, os, pathlib, time, urllib.request
+          import json, os, pathlib, re, time, urllib.request
 
           BASE = 'http://127.0.0.1:18899'
           APP_ID = 'com.ictrek.mcphub'
@@ -121,13 +121,24 @@ jobs:
               with urllib.request.urlopen(request, timeout=30) as response:
                   return response.read(2)
 
+          def version_key(name):
+              """(`prefix parts`, revision) so `vos.09 < vos.10` compares numerically."""
+              match = re.fullmatch(r'(.+?)[.-]vos\.([0-9]+)', str(name or ''))
+              if not match:
+                  return None
+              parts = []
+              for piece in re.split(r'[.-]', match.group(1)):
+                  parts.append((0, int(piece)) if piece.isdigit() else (1, piece))
+              return (tuple(parts), int(match.group(2)))
+
           def problems_of(record):
-              """Only two things decide success: the version is published, and its
-              archive downloads. current_version and the exact download path are
-              advisory - a re-published version legitimately reports different
-              values there, which used to fail the whole release."""
+              """Success means: the version is in the catalog, its archive downloads,
+              and - unless this is a deliberate rollback to an older version - the
+              catalog actually promotes it. A newer release that stays behind an
+              older `current_version` is a broken publish, not a rounding error."""
               detail = record.get('data') or {}
               archive = detail.get('app_tar_gz') or {}
+              current = detail.get('current_version')
               found = []
               if record.get('code') != 0:
                   found.append(f"code={record.get('code')!r}")
@@ -139,6 +150,15 @@ jobs:
               path = archive.get('download_path') or DEFAULT_ARCHIVE
               if VERSION not in path:
                   found.append(f"download_path={path!r} does not point at {VERSION!r}")
+              if current != VERSION:
+                  ours, theirs = version_key(VERSION), version_key(current)
+                  if ours is None or theirs is None or ours >= theirs:
+                      found.append(
+                          f"current_version={current!r}, expected {VERSION!r}: the catalog did not "
+                          f'promote the version that was just published')
+                  else:
+                      print(f'::warning::publishing older {VERSION!r} while the catalog is at '
+                            f'{current!r}; leaving the newer version as current')
               if not found:
                   try:
                       head = archive_head(path)
@@ -149,9 +169,9 @@ jobs:
                           found.append(f'archive {path!r} is not gzip: {head!r}')
               return detail, found
 
-          # The catalog can lag the upload by a few seconds; keep polling until the
-          # version shows up instead of failing on the first look.
-          deadline = time.time() + 120
+          # The catalog can lag the upload by a few seconds; keep polling until it
+          # catches up instead of failing on the first look.
+          deadline = time.time() + float(os.environ.get('PUBLISH_CHECK_TIMEOUT', '120'))
           while True:
               record = fetch_record()
               detail, problems = problems_of(record)
@@ -163,10 +183,6 @@ jobs:
                       'Published App Store record does not match the release: ' + '; '.join(problems))
               time.sleep(5)
 
-          current = detail.get('current_version')
-          if current != VERSION:
-              print(f"::warning::store reports current_version={current!r} while publishing {VERSION!r}; "
-                    f'version is published and downloadable, continuing')
           print(f'VOS App Store publication verified: {APP_ID} {VERSION}')
           PY
       - name: Close App Store tunnel
