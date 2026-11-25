@@ -37,7 +37,7 @@ import http from 'http';
 import type { Socket } from 'net';
 import { mcpConnectionRateLimiter, spaPageRateLimiter } from './utils/rateLimit.js';
 import { closeHttpServer } from './utils/serverShutdown.js';
-import { startNodeOpsTlsServer } from './services/nodeOpsTls.js';
+import { startNodeDataTlsServer, startNodeOpsTlsServer } from './services/nodeOpsTls.js';
 import { logger } from './utils/logger.js';
 
 /**
@@ -288,6 +288,9 @@ export class AppServer {
     // without them no TLS listener is created and the REQUIRE_TLS gate in
     // nodeToken.ts keeps every /node-ops request on the HTTP port at 403.
     startNodeOpsTlsServer(this.app);
+    // Data-plane TLS for peer /mcp calls; uses the same server certificate but
+    // does not require a client certificate (the MCP SDK cannot present one).
+    startNodeDataTlsServer(this.app);
   }
 
   /**

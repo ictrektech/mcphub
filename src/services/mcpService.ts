@@ -3623,6 +3623,15 @@ const closeServerRuntime = (serverInfo: ServerInfo): void => {
 
 // Close server client and transport (keeps the entry in serverInfos; the next
 // initializeClientsFromSettings rebuild drops it if it is no longer configured).
+/** Detach must not leave stale tools/prompts/resources visible from cache. */
+export const clearServerCapabilitiesCache = (name: string): void => {
+  const info = serverInfos.find((server) => server.name === name);
+  if (!info) return;
+  info.tools = [];
+  info.prompts = [];
+  info.resources = [];
+};
+
 export function closeServer(name: string) {
   principalRuntimes.invalidate({ serverName: name });
   const serverInfo = serverInfos.find((serverInfo) => serverInfo.name === name);

@@ -1,3 +1,11 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { setCredential } from '../../src/services/nodeCredentialStore.js';
+
+let secretsDir: string;
+
 const mockSettings: { value: any } = {
   value: {
     mcpServers: {},
@@ -77,6 +85,7 @@ jest.mock('../../src/services/mcpService.js', () => ({
   broadcastToolListChanged: () => mockBroadcastTool(),
   broadcastPromptListChanged: () => mockBroadcastPrompt(),
   broadcastResourceListChanged: () => mockBroadcastResource(),
+  clearServerCapabilitiesCache: () => undefined,
 }));
 
 import {
@@ -93,14 +102,16 @@ import {
 } from '../../src/services/remoteServerRegistrationService.js';
 
 describe('remote node MCP service registration (P1)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockSettings.value = {
       mcpServers: {},
       remoteNodes: [{ id: 'node-1', name: '192 orin nx', profile: 'jetson-orin' }],
     };
     // Attaching a peer needs a data-plane credential; these cases exercise the
-    // transport wiring, so provide one through the deployment-time env source.
-    process.env.MCP_NODE_DATA_PLANE_TOKEN_NODE_1 = 'test-data-plane-token';
+    // transport wiring, so seed one in a throwaway credential store.
+    secretsDir = await mkdtemp(join(tmpdir(), 'mcphub-registration-secrets-'));
+    process.env.MCP_NODE_SECRETS_DIR = secretsDir;
+    await setCredential('node-1', 'test-data-plane-token');
     mockServers.length = 0;
     mockGroups.length = 0;
     mockReachable.mockReset();
@@ -206,6 +217,7 @@ describe('remote node MCP service registration (P1)', () => {
   });
 });
 
-afterAll(() => {
-  delete process.env.MCP_NODE_DATA_PLANE_TOKEN_NODE_1;
+afterAll(async () => {
+  delete process.env.MCP_NODE_SECRETS_DIR;
+  if (secretsDir) await rm(secretsDir, { recursive: true, force: true });
 });

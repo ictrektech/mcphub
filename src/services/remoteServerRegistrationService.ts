@@ -62,7 +62,7 @@ export const connectRemoteServer = async (
   const node = getRemoteNodeInternal(schedulerNodeId);
   const binding = getRemoteServerBinding(schedulerNodeId, serverName);
   const dataPlaneTokenEnv = dataPlaneEnvNameOf(node.id);
-  const credential = await resolveDataPlaneToken(node.id);
+  const credential = await resolveDataPlaneToken(node);
   if (!credential) {
     throw new RemoteNodeError(
       `Node '${node.name}' has no data-plane credential; configure it in the node settings`,
@@ -91,6 +91,7 @@ export const connectRemoteServer = async (
     // while configs exposed by the API retain the harmless placeholder.
     dataPlaneTokenEnv,
     dataPlaneNodeId: node.id,
+    dataPlaneNodeName: node.name,
     headers: { Authorization: `Bearer \${${dataPlaneTokenEnv}}` },
     description: `远程节点 ${node.name}${node.profile ? ` (${node.profile})` : ''} 的 ${binding.serverName}`,
   };
@@ -123,6 +124,9 @@ export const disconnectRemoteServer = async (schedulerNodeId: string, serverName
   const upstreamName = upstreamNameOf(binding, node);
   const result = await mcp.toggleServerStatus(upstreamName, false);
   if (!result.success) throw new RemoteNodeError(result.message || 'Failed to disable upstream', 500);
+  // toggleServerStatus only flips status; the last tool list would otherwise
+  // stay in getServersInfo() and look callable until someone reloads the hub.
+  mcp.clearServerCapabilitiesCache(upstreamName);
   mcp.broadcastToolListChanged();
   mcp.broadcastPromptListChanged();
   mcp.broadcastResourceListChanged();

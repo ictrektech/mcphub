@@ -27,6 +27,7 @@ const upstream = () => ({
   enabled: true,
   dataPlaneTokenEnv: ENV_NAME,
   dataPlaneNodeId: 'node-b',
+  dataPlaneNodeName: 'peer-b',
   headers: { Authorization: 'Bearer ${MCP_NODE_DATA_PLANE_TOKEN_NODE_B}' },
 });
 
@@ -45,11 +46,11 @@ describe('runtime data-plane credential reference', () => {
     expect(expanded.dataPlaneNodeId).toBe('node-b');
   });
 
-  it('resolves the key only in the environment used to build the transport', async () => {
+  it('resolves the key by node id and name only at transport build time', async () => {
     const expanded = await expandServerConfig(upstream());
     const env = await getServerEnvironment(upstream());
 
-    expect(resolveDataPlaneToken).toHaveBeenCalledWith('node-b');
+    expect(resolveDataPlaneToken).toHaveBeenCalledWith({ id: 'node-b', name: 'peer-b' });
     expect(env[ENV_NAME]).toBe(TOKEN);
     expect(replaceEnvVars(expanded.headers ?? {}, env)).toEqual({ Authorization: `Bearer ${TOKEN}` });
   });

@@ -10,6 +10,7 @@ const updateRemoteNode = jest.fn();
 const connectRemoteServer = jest.fn();
 const disconnectRemoteServer = jest.fn();
 const listBindings = jest.fn();
+const createBinding = jest.fn();
 const httpsRequest = jest.fn();
 const resolveDataPlaneToken = jest.fn();
 const setCredential = jest.fn();
@@ -64,7 +65,7 @@ jest.mock('../../src/services/remoteServerBindingService.js', () => ({
   getRemoteServerBinding: () => ({ id: 'b1', serverName: 'demo' }),
   updateRemoteServerBinding: jest.fn(),
   listRemoteServerBindings: (...args: unknown[]) => listBindings(...args),
-  createRemoteServerBinding: async () => ({ id: 'b1', serverName: 'demo' }),
+  createRemoteServerBinding: (...args: unknown[]) => createBinding(...args),
 }));
 
 jest.mock('../../src/services/remoteServerRegistrationService.js', () => ({
@@ -83,7 +84,7 @@ import {
   putNodeCredential,
 } from '../../src/controllers/remoteNodeController.js';
 
-const node = () => ({ id: 'node-b', name: 'node-b', address: '10.0.0.2' });
+const node = () => ({ id: 'node-b', name: 'peer-b', address: '10.0.0.2' });
 
 const resMock = () => {
   const res = { status: jest.fn(), json: jest.fn() } as unknown as Response;
@@ -94,6 +95,38 @@ const resMock = () => {
 const reqMock = (params: Record<string, string>, body: Record<string, unknown> = {}) =>
   ({ params, body, header: () => undefined, user: { username: 'admin', isAdmin: true } }) as unknown as Request;
 
+const mockPeerResponse = () => {
+  httpsRequest.mockImplementation((_options: unknown, callback: (stream: EventEmitter) => void) => {
+    const response = new EventEmitter() as EventEmitter & { statusCode: number };
+    response.statusCode = 200;
+    callback(response);
+    process.nextTick(() => {
+      response.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({
+            success: true,
+            data: {
+              servers: [
+                {
+                  name: 'demo',
+                  type: 'stdio',
+                  status: 'connected',
+                  mcpPath: '/app/com.ictrek.mcphub/mcp/demo',
+                },
+              ],
+            },
+          }),
+        ),
+      );
+      response.emit('end');
+    });
+    const outgoing = new EventEmitter() as EventEmitter & { end: jest.Mock };
+    outgoing.end = jest.fn();
+    return outgoing;
+  });
+};
+
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
@@ -102,9 +135,12 @@ beforeEach(() => {
   process.env.MCP_NODE_OPS_CLIENT_KEY = '/tmp/client.key';
   process.env.MCP_NODE_OPS_CLIENT_CA = '/tmp/ca.pem';
   process.env.MCP_NODE_OPS_TOKEN = 'control-plane-token';
+  delete process.env.MCP_NODE_DATA_SCHEME;
+  delete process.env.MCP_NODE_DATA_PORT;
   getRemoteNodeInternal.mockImplementation(() => node());
   listRemoteNodes.mockReturnValue([node()]);
   listBindings.mockReturnValue([]);
+  createBinding.mockResolvedValue({ id: 'b1', serverName: 'demo' });
   updateRemoteNode.mockImplementation((_id: string, patch: Record<string, unknown>) => ({
     ...node(),
     ...patch,
@@ -113,7 +149,7 @@ beforeEach(() => {
   credentialStatus.mockResolvedValue({ configured: true, source: 'store' });
   setCredential.mockResolvedValue(undefined);
   deleteCredential.mockResolvedValue(undefined);
-  connectRemoteServer.mockResolvedValue({ serverName: 'demo@node-b', groupName: 'g', created: true });
+  connectRemoteServer.mockResolvedValue({ serverName: 'demo@peer-b', groupName: 'g', created: true });
   disconnectRemoteServer.mockResolvedValue(undefined);
 });
 
@@ -137,54 +173,46 @@ describe('node link attach', () => {
     expect(connectRemoteServer).not.toHaveBeenCalled();
   });
 
-  it('attaches when a runtime credential exists', async () => {
-    httpsRequest.mockImplementation((_options: unknown, callback: (stream: EventEmitter) => void) => {
-      const response = new EventEmitter() as EventEmitter & { statusCode: number };
-      response.statusCode = 200;
-      callback(response);
-      process.nextTick(() => {
-        response.emit(
-          'data',
-          Buffer.from(
-            JSON.stringify({
-              success: true,
-              data: {
-                servers: [
-                  { name: 'demo', type: 'stdio', status: 'connected', mcpPath: '/app/com.ictrek.mcphub/mcp/demo' },
-                ],
-              },
-            }),
-          ),
-        );
-        response.emit('end');
-      });
-      const outgoing = new EventEmitter() as EventEmitter & { end: jest.Mock };
-      outgoing.end = jest.fn();
-      return outgoing;
-    });
+  it('builds an HTTPS data-plane URL by default', async () => {
+    mockPeerResponse();
     const res = resMock();
 
     await attachNodeLinkServer(reqMock({ nodeId: 'node-b', name: 'demo' }), res);
 
-    expect((res.json as jest.Mock).mock.calls[0][0]).toMatchObject({
-      success: true,
-      data: { name: 'demo', attached: true, upstreamName: 'demo@node-b' },
-    });
+    expect(createBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ address: 'https://10.0.0.2:31891/app/com.ictrek.mcphub/mcp/demo' }),
+    );
     expect(connectRemoteServer).toHaveBeenCalledWith('node-b', 'demo');
+    expect(res.status).not.toHaveBeenCalledWith(400);
+  });
+
+  it('uses plain HTTP only when explicitly opted out', async () => {
+    process.env.MCP_NODE_DATA_SCHEME = 'http';
+    process.env.MCP_NODE_DATA_PORT = '31889';
+    mockPeerResponse();
+
+    await attachNodeLinkServer(reqMock({ nodeId: 'node-b', name: 'demo' }), resMock());
+
+    expect(createBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ address: 'http://10.0.0.2:31889/app/com.ictrek.mcphub/mcp/demo' }),
+    );
   });
 });
 
 describe('runtime credential management', () => {
-  it('stores the token and refreshes attached upstreams without a restart', async () => {
-    listBindings.mockReturnValue([{ id: 'b1', serverName: 'demo', upstreamName: 'demo@node-b' }]);
+  it('stores the token by id and name and refreshes attached upstreams', async () => {
+    listBindings.mockReturnValue([{ id: 'b1', serverName: 'demo', upstreamName: 'demo@peer-b' }]);
     const res = resMock();
 
     await putNodeCredential(reqMock({ nodeId: 'node-b' }, { token: TOKEN }), res);
 
-    expect(setCredential).toHaveBeenCalledWith('node-b', TOKEN);
+    expect(setCredential).toHaveBeenCalledWith(node(), TOKEN);
     expect(disconnectRemoteServer).toHaveBeenCalledWith('node-b', 'demo');
     expect(connectRemoteServer).toHaveBeenCalledWith('node-b', 'demo');
-    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual({ success: true, data: { configured: true, source: 'store' } });
+    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual({
+      success: true,
+      data: { configured: true, source: 'store' },
+    });
   });
 
   it('rejects an empty token', async () => {
@@ -207,15 +235,18 @@ describe('runtime credential management', () => {
   });
 
   it('deletes the stored token and detaches existing upstreams', async () => {
-    listBindings.mockReturnValue([{ id: 'b1', serverName: 'demo', upstreamName: 'demo@node-b' }]);
+    listBindings.mockReturnValue([{ id: 'b1', serverName: 'demo', upstreamName: 'demo@peer-b' }]);
     credentialStatus.mockResolvedValue({ configured: false, source: null });
     const res = resMock();
 
     await deleteNodeCredential(reqMock({ nodeId: 'node-b' }), res);
 
-    expect(deleteCredential).toHaveBeenCalledWith('node-b');
+    expect(deleteCredential).toHaveBeenCalledWith(node());
     expect(disconnectRemoteServer).toHaveBeenCalledWith('node-b', 'demo');
-    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual({ success: true, data: { configured: false, source: null } });
+    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual({
+      success: true,
+      data: { configured: false, source: null },
+    });
   });
 
   it('never emits the key in node API responses or accepts it via node edit', async () => {

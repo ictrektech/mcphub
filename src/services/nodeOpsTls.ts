@@ -120,6 +120,50 @@ export const startNodeOpsTlsServer = (app: Application): https.Server | null => 
   return server;
 };
 
+/** Server-only HTTPS listener for the /mcp data plane. The MCP SDK cannot
+ * present a client certificate, so this port encrypts traffic and relies on
+ * the peer Bearer key for authentication. Same cert as the control plane. */
+export const startNodeDataTlsServer = (app: Application): https.Server | null => {
+  const materials = resolveNodeOpsTlsMaterials();
+  if (!materials) return null;
+  const port = Number(process.env.MCP_NODE_DATA_TLS_PORT || 31891);
+  const mcpBase = `${config.basePath}/mcp`;
+
+  const dataPlane = express();
+  dataPlane.use((req, res, next) => {
+    const p = req.path;
+    const isMcp =
+      p === mcpBase ||
+      p.startsWith(`${mcpBase}/`) ||
+      p === '/mcp' ||
+      p.startsWith('/mcp/') ||
+      /^\/[^/]+\/mcp(\/|$)/.test(p);
+    if (isMcp) {
+      next();
+      return;
+    }
+    res.status(404).json({
+      success: false,
+      code: 'not-found',
+      message: 'Only /mcp is served on the data-plane TLS port',
+    });
+  });
+  dataPlane.use(app);
+
+  const server = https.createServer(
+    { key: materials.key, cert: materials.cert },
+    dataPlane,
+  );
+  server.on('error', (error: Error) => {
+    logger.error('[node-ops] data-plane TLS listener failed.', { reason: error.message });
+    server.close();
+  });
+  server.listen(port, () => {
+    logger.log(`node MCP data plane listening on :${port} (TLS)`);
+  });
+  return server;
+};
+
 export interface NodeCertIdentity {
   cn?: string;
   fingerprint?: string;

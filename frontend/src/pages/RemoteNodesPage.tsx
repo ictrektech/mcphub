@@ -395,6 +395,7 @@ const RemoteNodesPage: React.FC = () => {
               onChange={(event) => setForm((current) => ({ ...current, dataPlaneToken: event.target.value }))}
             />
             <span className="hub-sub">{t('remoteNodes.dataPlaneTokenHint')}</span>
+            <span className="hub-sub">{t('remoteNodes.credentialScopeHint')}</span>
           </label>
           <label className="flex items-center gap-2 text-[12px] self-end">
             <input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} />

@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export type CredentialSource = 'store' | 'env' | null;
+export type CredentialSource = 'store' | null;
 
 export interface CredentialStatus {
   configured: boolean;
@@ -9,6 +9,20 @@ export interface CredentialStatus {
 }
 
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/** Node id is the canonical key. Node name (the mTLS CN) is only a read
+ * fallback, so no stale alias is left behind when a node is renamed. */
+export interface CredentialNode {
+  id: string;
+  name?: string;
+}
+
+const keysOf = (node: CredentialNode | string): string[] => {
+  if (typeof node === 'string') return [validateNodeId(node)];
+  const keys = [validateNodeId(node.id)];
+  if (node.name && node.name !== node.id && ID_PATTERN.test(node.name)) keys.push(node.name);
+  return keys;
+};
 
 /** Overridable for local development and tests; container default is the persistent volume. */
 const storePath = (): string => join(process.env.MCP_NODE_SECRETS_DIR || '/app/data', 'node-secrets.json');
@@ -53,39 +67,41 @@ const writeStore = async (secrets: Record<string, string>): Promise<void> => {
   }
 };
 
-export const getStoredCredential = async (nodeId: string): Promise<string | undefined> => {
+export const getStoredCredential = async (
+  node: CredentialNode | string,
+): Promise<string | undefined> => {
   const secrets = await readStore();
-  return secrets[validateNodeId(nodeId)];
+  for (const key of keysOf(node)) {
+    if (secrets[key]?.trim()) return secrets[key].trim();
+  }
+  return undefined;
 };
 
-export const setCredential = async (nodeId: string, token: string): Promise<void> => {
-  const id = validateNodeId(nodeId);
+export const setCredential = async (
+  node: CredentialNode | string,
+  token: string,
+): Promise<void> => {
   if (typeof token !== 'string' || !token.trim()) {
     throw new Error('Credential token is required');
   }
   const secrets = await readStore();
-  secrets[id] = token.trim();
+  // Single canonical key: renaming a node must not leave a stale alias behind.
+  secrets[keysOf(node)[0]] = token.trim();
   await writeStore(secrets);
 };
 
-export const deleteCredential = async (nodeId: string): Promise<void> => {
-  const id = validateNodeId(nodeId);
+export const deleteCredential = async (node: CredentialNode | string): Promise<void> => {
   const secrets = await readStore();
-  delete secrets[id];
+  for (const key of keysOf(node)) delete secrets[key];
   await writeStore(secrets);
 };
 
 /** Only the UI-managed private file is a credential source. No env fallback. */
-export const resolveDataPlaneToken = async (nodeId: string): Promise<string | undefined> => {
-  const stored = await getStoredCredential(nodeId);
-  if (stored?.trim()) return stored.trim();
-  // Deployment-time fallback: containers may inject the key instead of using the UI.
-  return process.env[dataPlaneEnvNameOf(nodeId)]?.trim() || undefined;
-};
+export const resolveDataPlaneToken = async (
+  node: CredentialNode | string,
+): Promise<string | undefined> => getStoredCredential(node);
 
-export const credentialStatus = async (nodeId: string): Promise<CredentialStatus> => {
-  const stored = await getStoredCredential(nodeId);
-  if (stored?.trim()) return { configured: true, source: 'store' };
-  if (process.env[dataPlaneEnvNameOf(nodeId)]?.trim()) return { configured: true, source: 'env' };
-  return { configured: false, source: null };
-};
+export const credentialStatus = async (node: CredentialNode | string): Promise<CredentialStatus> =>
+  (await getStoredCredential(node))
+    ? { configured: true, source: 'store' }
+    : { configured: false, source: null };

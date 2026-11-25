@@ -305,3 +305,34 @@ bearer token still decides *what it may do*. Set
    entry is locked out on the next request even with a valid certificate). To
    retire a compromised CA, replace `ca.pem` on every node and restart.
 
+### Cross-node data plane (HTTPS by default)
+
+Peers attach a remote MCP service through `<BASE_PATH>/mcp/<name>` on the
+**data-plane TLS port** `MCP_NODE_DATA_TLS_PORT` (default `31891`, published in
+the VOS compose file). It reuses the same `server.crt/key` as the control plane
+but does not require a client certificate — the MCP SDK cannot present one.
+`Authorization` is the peer-specific Bearer key, so it is encrypted in transit.
+HTTPS is the default: set `MCP_NODE_DATA_SCHEME=http` explicitly (and point
+`MCP_NODE_DATA_PORT` at the plain port, usually `31889`) only if TLS is
+unavailable.
+
+Two deployment requirements, both easy to miss:
+
+- **A must trust B's CA**: add `NODE_EXTRA_CA_CERTS=/app/data/certs/ca.pem` to
+  the calling hub. Without it the upstream handshake fails with a certificate
+  verification error and the attach UI only shows a generic failure. This is a
+  process-start setting, so it is set once per deployment, not per credential.
+- **B's server cert SAN must match the address A dials**: generate it with
+  `--address <IP>` and/or `--hostname <DNS>` matching the `address`/`hostname`
+  registered in A's node list. An IP URL needs `IP:<addr>` in the SAN; a DNS
+  URL needs `DNS:<name>`. Otherwise Node rejects the certificate even though
+  the CA is trusted.
+
+The peer Bearer key itself is entered in the node editor on A and stored only
+in `/app/data/node-secrets.json` (0600, atomic replace), keyed by node id with
+the node name as a read fallback. Saving takes effect immediately — attached
+upstreams are reconnected in-process, with no restart and no settings writes.
+There is no environment-variable fallback. Scope is granted on B when the key
+is created: `accessType: servers` with `allowedServers` listing only the
+services to share.
+

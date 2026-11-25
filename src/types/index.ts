@@ -560,6 +560,7 @@ export interface ServerConfig {
   // back into the presented server config.
   dataPlaneTokenEnv?: string;
   dataPlaneNodeId?: string;
+  dataPlaneNodeName?: string;
   enabled?: boolean; // Flag to enable/disable the server
   owner?: string; // Owner of the server, defaults to 'admin' user
   // Per-server visibility for non-admin users.

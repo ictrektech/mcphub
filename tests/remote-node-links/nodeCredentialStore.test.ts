@@ -28,8 +28,8 @@ afterEach(async () => {
 });
 
 describe('node credential store', () => {
-  it('writes a 0600 file keyed by node id', async () => {
-    await setCredential('node-b', '  mcphub_from_store  ');
+  it('writes only the canonical id key with 0600 permissions', async () => {
+    await setCredential({ id: 'node-b', name: 'peer-b' }, '  mcphub_from_store  ');
 
     const parsed = JSON.parse(await readFile(file, 'utf8'));
     expect(parsed).toEqual({ 'node-b': 'mcphub_from_store' });
@@ -43,25 +43,18 @@ describe('node credential store', () => {
     expect(await credentialStatus('node-b')).toEqual({ configured: true, source: 'store' });
   });
 
-  it('falls back to the deployment environment variable', async () => {
+  it('ignores a matching environment variable entirely', async () => {
     process.env[dataPlaneEnvNameOf('node-b')] = 'mcphub_from_env';
-    try {
-      expect(await resolveDataPlaneToken('node-b')).toBe('mcphub_from_env');
-      expect(await credentialStatus('node-b')).toEqual({ configured: true, source: 'env' });
-    } finally {
-      delete process.env[dataPlaneEnvNameOf('node-b')];
-    }
+
+    expect(await resolveDataPlaneToken('node-b')).toBeUndefined();
+    expect(await credentialStatus('node-b')).toEqual({ configured: false, source: null });
+    delete process.env[dataPlaneEnvNameOf('node-b')];
   });
 
-  it('prefers the stored credential over the environment variable', async () => {
-    process.env[dataPlaneEnvNameOf('node-c')] = 'mcphub_from_env';
-    try {
-      await setCredential('node-c', 'mcphub_from_store');
-      expect(await resolveDataPlaneToken('node-c')).toBe('mcphub_from_store');
-      expect(await credentialStatus('node-c')).toEqual({ configured: true, source: 'store' });
-    } finally {
-      delete process.env[dataPlaneEnvNameOf('node-c')];
-    }
+  it('falls back to the node name when no id entry exists', async () => {
+    await setCredential('peer-b', 'mcphub_key');
+
+    expect(await resolveDataPlaneToken({ id: 'new-id', name: 'peer-b' })).toBe('mcphub_key');
   });
 
   it('reports unconfigured and refuses invalid node ids or blank tokens', async () => {
@@ -70,10 +63,10 @@ describe('node credential store', () => {
     await expect(setCredential('bad id', 'token')).rejects.toThrow();
   });
 
-  it('deletes only the requested node credential', async () => {
-    await setCredential('node-b', 'mcphub_b');
+  it('deletes only the canonical key and leaves other nodes alone', async () => {
+    await setCredential({ id: 'node-b', name: 'peer-b' }, 'mcphub_b');
     await setCredential('node-c', 'mcphub_c');
-    await deleteCredential('node-b');
+    await deleteCredential({ id: 'node-b', name: 'peer-b' });
 
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ 'node-c': 'mcphub_c' });
   });

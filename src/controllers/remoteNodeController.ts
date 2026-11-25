@@ -54,7 +54,7 @@ const fail = (res: Response, error: unknown): void => {
 // The peer Bearer key comes only from the runtime credential store, never
 // from settings or the environment.
 const hasDataPlaneToken = async (node: RemoteNodeConfig): Promise<boolean> =>
-  Boolean(await resolveDataPlaneToken(node.id));
+  Boolean(await resolveDataPlaneToken(node));
 
 const rejectMissingDataPlaneToken = (node: RemoteNodeConfig, res: Response): void => {
   res.status(400).json({
@@ -380,9 +380,13 @@ export const listNodeLinkServers = async (req: Request, res: Response): Promise<
 const mcpDataUrlOf = (node: RemoteNodeConfig, mcpPath: string | undefined, name: string): string => {
   const host = node.address?.trim() || node.hostname?.trim();
   if (!host) throw new RemoteNodeError(`Node '${node.name}' has no address`, 400);
-  const port = process.env.MCP_NODE_DATA_PORT || process.env.VOS_MCPHUB_HOST_PORT || '31889';
+  // Encrypted data plane is the default; plain HTTP is an explicit opt-out.
+  const scheme = process.env.MCP_NODE_DATA_SCHEME === 'http' ? 'http' : 'https';
+  const port =
+    process.env.MCP_NODE_DATA_PORT ||
+    (scheme === 'https' ? '31891' : process.env.VOS_MCPHUB_HOST_PORT || '31889');
   const path = mcpPath || `${config.basePath}/mcp/${encodeURIComponent(name)}`;
-  return new URL(path, `http://${host}:${port}`).toString();
+  return new URL(path, `${scheme}://${host}:${port}`).toString();
 };
 
 export const attachNodeLinkServer = async (req: Request, res: Response): Promise<void> => {
@@ -451,10 +455,10 @@ export const putNodeCredential = async (req: Request, res: Response): Promise<vo
       res.status(400).json({ success: false, message: 'token is required' });
       return;
     }
-    await setCredential(node.id, token);
+    await setCredential(node, token);
     await refreshNodeLinks(node.id);
-    audit(req, 'node-link.credential-set', { nodeId: node.id });
-    res.json({ success: true, data: await credentialStatus(node.id) });
+    audit(req, 'node-link.credential-set', { nodeId: node.id, nodeName: node.name });
+    res.json({ success: true, data: await credentialStatus(node) });
   } catch (error) {
     fail(res, error);
   }
@@ -463,7 +467,7 @@ export const putNodeCredential = async (req: Request, res: Response): Promise<vo
 export const deleteNodeCredential = async (req: Request, res: Response): Promise<void> => {
   try {
     const node = getRemoteNodeInternal(req.params.nodeId);
-    await deleteCredential(node.id);
+    await deleteCredential(node);
     for (const binding of listRemoteServerBindings(node.id).filter((row) => row.upstreamName)) {
       try {
         await disconnectRemoteServer(node.id, binding.serverName);
@@ -474,8 +478,8 @@ export const deleteNodeCredential = async (req: Request, res: Response): Promise
         });
       }
     }
-    audit(req, 'node-link.credential-delete', { nodeId: node.id });
-    res.json({ success: true, data: await credentialStatus(node.id) });
+    audit(req, 'node-link.credential-delete', { nodeId: node.id, nodeName: node.name });
+    res.json({ success: true, data: await credentialStatus(node) });
   } catch (error) {
     fail(res, error);
   }
@@ -484,7 +488,7 @@ export const deleteNodeCredential = async (req: Request, res: Response): Promise
 export const getNodeCredential = async (req: Request, res: Response): Promise<void> => {
   try {
     const node = getRemoteNodeInternal(req.params.nodeId);
-    res.json({ success: true, data: await credentialStatus(node.id) });
+    res.json({ success: true, data: await credentialStatus(node) });
   } catch (error) {
     fail(res, error);
   }

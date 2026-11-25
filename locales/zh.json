@@ -1657,6 +1657,7 @@
     "profile": "档位",
     "dataPlaneToken": "数据面凭据",
     "dataPlaneTokenHint": "对端签发的 /mcp Bearer Key。保存在本机私有凭据文件，不写入配置；保存后立即生效，无需重启。",
+    "credentialScopeHint": "权限在对端授予：请在 B 上创建 key 时用 accessType=servers，并只在 allowedServers 里列出要共享的服务。",
     "credentialConfigured": "已配置，留空不修改",
     "credentialPlaceholder": "粘贴对端签发的 Bearer Key",
     "credentialSaved": "凭据已保存，已接入的上游已刷新",

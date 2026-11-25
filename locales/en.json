@@ -1657,6 +1657,7 @@
     "profile": "Profile",
     "dataPlaneToken": "Data-plane credential",
     "dataPlaneTokenHint": "Bearer key issued by the peer for /mcp. Stored in a private runtime file, never in settings; saving takes effect immediately, no restart needed.",
+    "credentialScopeHint": "Scope is granted on the peer: create the key there with accessType=servers and allowedServers listing only the services you share.",
     "credentialConfigured": "Configured — leave blank to keep the current key",
     "credentialPlaceholder": "Paste the peer's Bearer key",
     "credentialSaved": "Credential saved and attached upstreams refreshed",

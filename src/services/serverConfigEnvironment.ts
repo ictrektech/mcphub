@@ -9,7 +9,10 @@ const dataPlaneSecretEnv = async (
   config: ServerConfig,
 ): Promise<Record<string, string>> => {
   if (!config.dataPlaneTokenEnv || !config.dataPlaneNodeId) return {};
-  const token = await resolveDataPlaneToken(config.dataPlaneNodeId);
+  const token = await resolveDataPlaneToken({
+    id: config.dataPlaneNodeId,
+    name: config.dataPlaneNodeName,
+  });
   return token ? { [config.dataPlaneTokenEnv]: token } : {};
 };
 

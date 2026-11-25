@@ -9,6 +9,7 @@ const findByName = jest.fn();
 const updateServers = jest.fn();
 const getRemoteNodeInternal = jest.fn();
 const resolveDataPlaneToken = jest.fn();
+const clearServerCapabilitiesCache = jest.fn();
 
 jest.mock('../../src/services/nodeCredentialStore.js', () => ({
   dataPlaneEnvNameOf: (id: string) =>
@@ -57,12 +58,16 @@ jest.mock('../../src/services/mcpService.js', () => ({
   addServer: (...args: unknown[]) => addServer(...args),
   toggleServerStatus: (...args: unknown[]) => toggleServerStatus(...args),
   notifyToolChanged: async () => undefined,
+  clearServerCapabilitiesCache: (...args: unknown[]) => clearServerCapabilitiesCache(...args),
   broadcastToolListChanged: jest.fn(),
   broadcastPromptListChanged: jest.fn(),
   broadcastResourceListChanged: jest.fn(),
 }));
 
-import { connectRemoteServer } from '../../src/services/remoteServerRegistrationService.js';
+import {
+  connectRemoteServer,
+  disconnectRemoteServer,
+} from '../../src/services/remoteServerRegistrationService.js';
 
 const node = () => ({ id: 'node-b', name: 'node-b', address: '10.0.0.2' });
 
@@ -115,5 +120,14 @@ describe('connectRemoteServer data plane', () => {
 
     expect(addServer).not.toHaveBeenCalled();
     expect(toggleServerStatus).toHaveBeenCalledWith('demo@node-b', true);
+  });
+
+  it('clears cached capabilities on detach so stale tools disappear', async () => {
+    findById.mockResolvedValue({ name: 'demo@node-b', enabled: true });
+
+    await disconnectRemoteServer('node-b', 'demo');
+
+    expect(toggleServerStatus).toHaveBeenCalledWith('demo@node-b', false);
+    expect(clearServerCapabilitiesCache).toHaveBeenCalledWith('demo@node-b');
   });
 });

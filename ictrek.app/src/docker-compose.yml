@@ -27,6 +27,7 @@ x-mcphub-base: &mcphub-base
   ports:
     - '${VOS_MCPHUB_HOST_PORT:-31889}:3000'
     - '${VOS_MCPHUB_NODE_OPS_PORT:-31890}:31890'
+    - '${VOS_MCPHUB_NODE_DATA_TLS_PORT:-31891}:31891'
   volumes:
     - ${VOS_APP_STORAGE_PATH}/data:/app/data
   networks:
