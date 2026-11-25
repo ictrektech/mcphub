@@ -203,11 +203,17 @@ import {
 import {
   addRemoteNode,
   addRemoteServer,
+  attachNodeLinkServer,
+  detachNodeLinkServer,
+  deleteNodeCredential,
   discoverFromScheduler,
   editRemoteNode,
+  getNodeCredential,
   getRemoteNodes,
   getRemoteServers,
   importFromScheduler,
+  listNodeLinkServers,
+  putNodeCredential,
   removeRemoteNode,
   removeRemoteServerBindingForNode,
   toggleRemoteServerAccess,
@@ -220,6 +226,20 @@ import {
   mcpConnectionRateLimiter,
   templateRateLimiter,
 } from '../utils/rateLimit.js';
+import {
+  nodeOpsDisableServer,
+  nodeOpsEnableServer,
+  nodeOpsHealth,
+  nodeOpsImportServer,
+  nodeOpsListServers,
+  nodeOpsNotFound,
+  nodeOpsServerDefinition,
+  nodeOpsServerLogs,
+} from '../controllers/nodeOpsController.js';
+import {
+  nodeOpsRateLimiter,
+  requireNodeToken,
+} from '../middlewares/nodeToken.js';
 
 const router = express.Router();
 const authenticatedRouter = express.Router();
@@ -316,6 +336,40 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     '/remote-nodes/:id/servers/:name',
     requireAdminMiddleware,
     removeRemoteServerBindingForNode,
+  );
+
+  // B-2: attach a peer node's MCP service as a local streamable-http upstream.
+  // Control plane to the peer runs over mTLS; the /mcp data plane uses the
+  // peer-specific credential stored at runtime, never a caller's VOS token.
+  authenticatedRouter.get(
+    '/node-links/:nodeId/credential',
+    requireAdminMiddleware,
+    getNodeCredential,
+  );
+  authenticatedRouter.put(
+    '/node-links/:nodeId/credential',
+    requireAdminMiddleware,
+    putNodeCredential,
+  );
+  authenticatedRouter.delete(
+    '/node-links/:nodeId/credential',
+    requireAdminMiddleware,
+    deleteNodeCredential,
+  );
+  authenticatedRouter.get(
+    '/node-links/:nodeId/servers',
+    requireAdminMiddleware,
+    listNodeLinkServers,
+  );
+  authenticatedRouter.post(
+    '/node-links/:nodeId/servers/:name/attach',
+    requireAdminMiddleware,
+    attachNodeLinkServer,
+  );
+  authenticatedRouter.post(
+    '/node-links/:nodeId/servers/:name/detach',
+    requireAdminMiddleware,
+    detachNodeLinkServer,
   );
 
   authenticatedRouter.use(replicaConfiguration);
@@ -591,6 +645,35 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   app.get(`${config.basePath}/discovery/servers/:name/install`, getDiscoveryServerInstall);
   app.get(`${config.basePath}/discovery/categories`, listDiscoveryCategories);
   app.get(`${config.basePath}/discovery/tags`, listDiscoveryTags);
+
+  // Node-to-node operations API (mcp-node-ops-plan.md §3). Bearer-authenticated
+  // by node tokens only. Deliberately NOT mounted under `${BASE_PATH}/api`:
+  // that subtree is fully taken over by the global auth middleware, which would
+  // shadow the node-token check. Registered here inside initRoutes so these
+  // routes exist before the SPA wildcard `${BASE_PATH}/*`.
+  app.get(`${config.basePath}/node-ops/health`, nodeOpsRateLimiter, requireNodeToken(null), nodeOpsHealth);
+  app.get(`${config.basePath}/node-ops/servers`, nodeOpsRateLimiter, requireNodeToken('read'), nodeOpsListServers);
+  app.get(`${config.basePath}/node-ops/servers/:name/logs`, nodeOpsRateLimiter, requireNodeToken('logs'), nodeOpsServerLogs);
+  app.get(
+    `${config.basePath}/node-ops/servers/:name/definition`,
+    nodeOpsRateLimiter,
+    requireNodeToken('definition'),
+    nodeOpsServerDefinition,
+  );
+  app.post(
+    `${config.basePath}/node-ops/servers/:name/enable`,
+    nodeOpsRateLimiter,
+    requireNodeToken('control'),
+    nodeOpsEnableServer,
+  );
+  app.post(
+    `${config.basePath}/node-ops/servers/:name/disable`,
+    nodeOpsRateLimiter,
+    requireNodeToken('control'),
+    nodeOpsDisableServer,
+  );
+  app.post(`${config.basePath}/node-ops/servers`, nodeOpsRateLimiter, requireNodeToken('import'), nodeOpsImportServer);
+  app.all(`${config.basePath}/node-ops/*`, nodeOpsRateLimiter, nodeOpsNotFound);
 
   // OpenAPI generation endpoints
   app.get(`${config.basePath}/api/openapi.json`, getOpenAPISpec);

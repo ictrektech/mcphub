@@ -23,7 +23,7 @@ describe('DataService.mergeSettings', () => {
 
     expect(merged.mcpServers).toEqual({ fresh: { type: 'stdio', command: 'node' } });
     // These used to be dropped by a hard-coded whitelist, which silently broke
-    // node registration.
+    // node registration and node-ops attach/detach.
     expect(merged.remoteNodes).toEqual(stored.remoteNodes);
     expect(merged.remoteServerBindings).toEqual(stored.remoteServerBindings);
     expect(merged.bearerKeys).toEqual(stored.bearerKeys);

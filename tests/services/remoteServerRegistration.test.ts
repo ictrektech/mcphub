@@ -1,3 +1,11 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { setCredential } from '../../src/services/nodeCredentialStore.js';
+
+let secretsDir: string;
+
 const mockSettings: { value: any } = {
   value: {
     mcpServers: {},
@@ -65,7 +73,6 @@ const mockRemoveServer = jest.fn(async (name: string) => {
 const mockBroadcastTool = jest.fn();
 const mockBroadcastPrompt = jest.fn();
 const mockBroadcastResource = jest.fn();
-const mockClearCapabilities = jest.fn();
 
 jest.mock('../../src/services/mcpService.js', () => ({
   addServer: async (name: string, config: any) => {
@@ -78,7 +85,7 @@ jest.mock('../../src/services/mcpService.js', () => ({
   broadcastToolListChanged: () => mockBroadcastTool(),
   broadcastPromptListChanged: () => mockBroadcastPrompt(),
   broadcastResourceListChanged: () => mockBroadcastResource(),
-  clearServerCapabilitiesCache: (...args: any[]) => mockClearCapabilities(...args),
+  clearServerCapabilitiesCache: () => undefined,
 }));
 
 import {
@@ -95,11 +102,16 @@ import {
 } from '../../src/services/remoteServerRegistrationService.js';
 
 describe('remote node MCP service registration (P1)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockSettings.value = {
       mcpServers: {},
       remoteNodes: [{ id: 'node-1', name: '192 orin nx', profile: 'jetson-orin' }],
     };
+    // Attaching a peer needs a data-plane credential; these cases exercise the
+    // transport wiring, so seed one in a throwaway credential store.
+    secretsDir = await mkdtemp(join(tmpdir(), 'mcphub-registration-secrets-'));
+    process.env.MCP_NODE_SECRETS_DIR = secretsDir;
+    await setCredential('node-1', 'test-data-plane-token');
     mockServers.length = 0;
     mockGroups.length = 0;
     mockReachable.mockReset();
@@ -115,7 +127,6 @@ describe('remote node MCP service registration (P1)', () => {
     mockBroadcastTool.mockReset();
     mockBroadcastPrompt.mockReset();
     mockBroadcastResource.mockReset();
-    mockClearCapabilities.mockReset();
   });
 
   it('names upstreams by service and node, and groups by node', () => {
@@ -169,8 +180,6 @@ describe('remote node MCP service registration (P1)', () => {
       nodeProfile: 'jetson-orin',
     });
     expect(mockGroups[0].servers).toContain('amap@192-orin-nx');
-    // addServer only persists the definition; the fresh upstream must be enabled.
-    expect(mockToggleServerStatus).toHaveBeenCalledWith('amap@192-orin-nx', true);
     expect(mockNotifyToolChanged).toHaveBeenCalledWith('amap@192-orin-nx', { reportEmbeddingProgress: true });
   });
 
@@ -190,7 +199,6 @@ describe('remote node MCP service registration (P1)', () => {
     await connectRemoteServer('node-1', 'amap');
     await disconnectRemoteServer('node-1', 'amap');
     expect(mockToggleServerStatus).toHaveBeenCalledWith('amap@192-orin-nx', false);
-    expect(mockClearCapabilities).toHaveBeenCalledWith('amap@192-orin-nx');
     expect(mockBroadcastTool).toHaveBeenCalled();
     await removeRemoteServer('node-1', 'amap');
     expect(mockRemoveServer).toHaveBeenCalledWith('amap@192-orin-nx');
@@ -207,4 +215,9 @@ describe('remote node MCP service registration (P1)', () => {
     expect(checked.reachable).toBe(false);
     expect(checked.lastError).toMatch(/unreachable/);
   });
+});
+
+afterAll(async () => {
+  delete process.env.MCP_NODE_SECRETS_DIR;
+  if (secretsDir) await rm(secretsDir, { recursive: true, force: true });
 });

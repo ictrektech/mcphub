@@ -215,3 +215,124 @@ Chinese users can also support via WeChat Pay — see [中文版](README.zh.md).
 ## 📄 License
 
 Licensed under the [Apache 2.0 License](LICENSE).
+
+## 🔗 Node-to-Node Operations (`/node-ops`)
+
+An optional, token-gated HTTP interface group for cross-node MCP visibility and soft control. It never touches processes or containers: `enable` / `disable` only change whether this hub connects to a server, and definition export/import copies configuration between hubs. Peer credentials are separate from user accounts and VOS tokens.
+
+Configure peers at startup through `MCP_NODE_TOKENS` (see `mcp-node-ops-plan.md` for the full contract):
+
+```bash
+export MCP_NODE_TOKENS='[
+  {"name":"node-a","token":"<32+ char random string>","actions":["read","logs","definition","control","import","import-stdio"],"scope":"admin"},
+  {"name":"node-b","token":"<32+ char random string>","actions":["read"],"scope":"node"}
+]'
+```
+
+Reachability is a deployment concern: the VOS package publishes the application port on the host (`${VOS_MCPHUB_HOST_PORT:-31889}`), because the VOS gateway itself publishes none — a peer on another node calls `http://<node host>:31889<BASE_PATH>/node-ops/...`. See `ictrek.app/README.md` ("Cross-node access").
+
+The group is mounted at `<BASE_PATH>/node-ops` outside `<BASE_PATH>/api` and requires `Authorization: Bearer <nodeToken>`. Requests without a valid token answer 401 with a `code` (`node-token-missing` / `node-token-invalid`). `actions` are `read`, `logs`, `definition`, `control`, `import`, `import-stdio`; `scope: node` cannot see or export other owners' private servers.
+
+| Method | Path | Action |
+| --- | --- | --- |
+| GET | `/node-ops/health` | valid token |
+| GET | `/node-ops/servers` | `read` |
+| GET | `/node-ops/servers/:name/logs?tail=200` | `logs` |
+| GET | `/node-ops/servers/:name/definition` | `definition` |
+| POST | `/node-ops/servers/:name/enable` | `control` |
+| POST | `/node-ops/servers/:name/disable` | `control` |
+| POST | `/node-ops/servers` | `import` (`import-stdio` for stdio) |
+
+Run the contract suite (it imports the real middleware and controller; only backing services are mocked), then verify a running hub. `BASE_URL` must include the deployment `BASE_PATH`. The script prints PASS/FAIL per check and leaves `verify-*` fixtures behind because `/node-ops` has no DELETE endpoint — it lists the `mcpServers` keys to remove at the end.
+
+```bash
+pnpm test -- tests/node-ops
+
+BASE_URL=http://127.0.0.1:3000/app/com.ictrek.mcphub \
+NODE_OPS_ADMIN_TOKEN='<all actions, scope=admin>' \
+NODE_OPS_NODE_TOKEN='<no import-stdio, scope=node>' \
+NODE_OPS_READ_TOKEN='<read only, scope=node>' \
+sh scripts/verify-node-ops.sh
+```
+
+### mTLS control plane (upgrade note: breaking by default)
+
+> **Release note (breaking):** as of the control-plane encryption release,
+> `MCP_NODE_OPS_REQUIRE_TLS` defaults to `true`. Plain-HTTP `/node-ops`
+> requests answer `403 tls-required` immediately after the upgrade. That is
+> the designed fail-closed behaviour, not an outage: deploy certificates (or
+> explicitly set `MCP_NODE_OPS_REQUIRE_TLS=false` to keep the old token-only
+> HTTP mode) before rolling out.
+
+The control plane is a second listener on `MCP_NODE_OPS_PORT` (default
+`31890`) serving **only** `/node-ops` over mutual TLS. The client certificate
+proves *which node* is calling (cert CN must be a registered peer name); the
+bearer token still decides *what it may do*. Set
+`MCP_NODE_MTLS_ONLY=true` to authenticate by certificate alone.
+
+1. **Generate** — on any machine with openssl, one command per node
+   (run once to create the CA, then reuse it with `--ca-key`):
+
+   ```bash
+   scripts/gen-node-certs.sh --node node-a --address 10.0.0.21 --hostname node-a.local --out ./node-certs
+   # second node reuses the CA:
+   scripts/gen-node-certs.sh --node node-b --address 10.0.0.22 --out ./node-certs --ca-key ./node-certs/ca.key
+   ```
+
+2. **Distribute / mount** — per node, put `ca.pem`, `server.crt`, `server.key`
+   into the persistent volume at `/app/data/certs/` and point the process at
+   them (the VOS package maps the port for you):
+
+   ```yaml
+   environment:
+     MCP_NODE_OPS_TLS_CERT: /app/data/certs/server.crt
+     MCP_NODE_OPS_TLS_KEY: /app/data/certs/server.key
+     MCP_NODE_OPS_TLS_CA: /app/data/certs/ca.pem
+     MCP_NODE_OPS_PORT: '31890'      # control-plane port
+     MCPHUB_NODE_NAME: node-a        # must match the peer entry below
+   ```
+
+   `ca.key` stays with whoever administers the PKI; it never belongs on an
+   MCPHub node. Peers dial `https://<node>:31890<BASE_PATH>/node-ops/...` with
+   `curl --cert client.crt --key client.key --cacert ca.pem`.
+
+3. **Rotate** — re-run the generator (or reissue with a new `--days`), replace
+   the three files on the node, restart MCPHub. There is no hot reload by
+   design; tokens rotate independently via `MCP_NODE_TOKENS` + restart.
+
+4. **Revoke** — remove the peer from `MCP_NODE_TOKENS` (certificate trust alone
+   is never sufficient: the cert CN must match a registered peer, so a deleted
+   entry is locked out on the next request even with a valid certificate). To
+   retire a compromised CA, replace `ca.pem` on every node and restart.
+
+### Cross-node data plane (HTTPS by default)
+
+Peers attach a remote MCP service through `<BASE_PATH>/mcp/<name>` on the
+**data-plane TLS port** `MCP_NODE_DATA_TLS_PORT` (default `31891`, published in
+the VOS compose file). It reuses the same `server.crt/key` as the control plane
+but does not require a client certificate — the MCP SDK cannot present one.
+`Authorization` is the peer-specific Bearer key, so it is encrypted in transit.
+HTTPS is the default: set `MCP_NODE_DATA_SCHEME=http` explicitly (and point
+`MCP_NODE_DATA_PORT` at the plain port, usually `31889`) only if TLS is
+unavailable.
+
+Two deployment requirements, both easy to miss:
+
+- **A must trust B's CA**: add `NODE_EXTRA_CA_CERTS=/app/data/certs/ca.pem` to
+  the calling hub. Without it the upstream handshake fails with a certificate
+  verification error and the attach UI only shows a generic failure. This is a
+  process-start setting, so it is set once per deployment, not per credential.
+- **B's server cert SAN must match the address A dials**: generate it with
+  `--address <IP>` and/or `--hostname <DNS>` matching the `address`/`hostname`
+  registered in A's node list. An IP URL needs `IP:<addr>` in the SAN; a DNS
+  URL needs `DNS:<name>`. Otherwise Node rejects the certificate even though
+  the CA is trusted.
+
+The peer Bearer key itself is entered in the node editor on A and stored only
+in `/app/data/node-secrets.json` (0600, atomic replace), keyed by node id with
+the node name as a read fallback. Saving takes effect immediately — attached
+upstreams are reconnected in-process, with no restart and no settings writes.
+There is no environment-variable fallback. Scope is granted on B when the key
+is created: `accessType: servers` with `allowedServers` listing only the
+services to share.
+
