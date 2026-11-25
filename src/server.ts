@@ -37,6 +37,7 @@ import http from 'http';
 import type { Socket } from 'net';
 import { mcpConnectionRateLimiter, spaPageRateLimiter } from './utils/rateLimit.js';
 import { closeHttpServer } from './utils/serverShutdown.js';
+import { startNodeOpsTlsServer } from './services/nodeOpsTls.js';
 import { logger } from './utils/logger.js';
 
 /**
@@ -281,6 +282,12 @@ export class AppServer {
       this.connections.add(socket);
       socket.once('close', () => this.connections.delete(socket));
     });
+
+    // §A-2: node-ops control plane — a second, mTLS-only listener serving the
+    // same express app. Started only when all three certificate files exist;
+    // without them no TLS listener is created and the REQUIRE_TLS gate in
+    // nodeToken.ts keeps every /node-ops request on the HTTP port at 403.
+    startNodeOpsTlsServer(this.app);
   }
 
   /**

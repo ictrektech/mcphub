@@ -305,6 +305,9 @@ peer 身份：`principal = { username: peer.name, userGroups: [], isAdmin: peer.
 | 403 | `node-action-forbidden` | action 不在白名单 |
 | 403 | `node-scope-forbidden` | `discover` / `config.read` / `manage` 未通过 |
 | 403 | `stdio-import-forbidden` | 无 `import-stdio` 却导 stdio |
+| 403 | `tls-required` | `MCP_NODE_OPS_REQUIRE_TLS=true`（默认）时从 HTTP 端口访问 `/node-ops` |
+| 403 | `node-peer-unknown` | 客户端证书 CN 不在 `MCP_NODE_TOKENS` 里 |
+| 403 | `node-peer-mismatch` | 证书 CN 与该 Bearer token 所属 peer 不一致 |
 | 403 | `readonly` | `READONLY=true` 时执行写动作 |
 | 404 | `server-not-found` | 服务不存在 |
 | 409 | `server-duplicate` | 导入重名 |
@@ -605,6 +608,8 @@ curl -s -H "Authorization: Bearer $TOK" "$BASE/node-ops/servers/amap/definition"
 | 第二因子 | 默认仍要求 `Authorization: Bearer <token>` 且该 token 的 peer 名必须与证书 CN 一致；`MCP_NODE_MTLS_ONLY=true` 时只认证书 |
 | 明文回退 | `MCP_NODE_OPS_REQUIRE_TLS=true`（默认）时，`/node-ops` 在 HTTP 端口上 403 `tls-required`，不得降级 |
 | 证书目录（部署侧） | `/app/data/certs/{ca.pem,server.crt,server.key,client.crt,client.key}`，在持久卷内 |
+| 端口发布 | **31890 必须发布到宿主**：`ictrek.app/src/docker-compose.yml` 增加 `'${VOS_MCPHUB_NODE_OPS_PORT:-31890}:31890'`。只发布 31889 的话控制面从别的节点连不上 |
+| 破坏性变更 | `REQUIRE_TLS` 默认 true，升级后 HTTP 端口的 `/node-ops` 立即 403。必须在发布说明里写清 |
 | 审计 | 每条审计追加 `certFingerprint`（client cert 的 sha256 前 16 位 hex）；token 与私钥永不入日志 |
 
 **拒绝行为（逐条要有测试）**

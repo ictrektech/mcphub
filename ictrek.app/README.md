@@ -30,16 +30,21 @@ MCPHub user-level Bearer Keys remain supported on MCP transports; they are not V
 
 ### Cross-node access (`/node-ops`)
 
-The package publishes the application port on the host as `${VOS_MCPHUB_HOST_PORT:-31889}` so another machine's MCPHub can reach this one. The VOS Traefik gateway publishes no port of its own, so `http://mcphub:3000` only works inside `vos_default`; a peer on a different node needs the published port:
+The package publishes two host ports so another machine's MCPHub can reach this one:
+
+- `${VOS_MCPHUB_HOST_PORT:-31889}` — the application port (dashboard, `/api`, MCP transports). The VOS Traefik gateway publishes no port of its own, so `http://mcphub:3000` only works inside `vos_default`.
+- `${VOS_MCPHUB_NODE_OPS_PORT:-31890}` — the mTLS control plane. Only `/node-ops` is served here, and only with a client certificate signed by the node's `MCP_NODE_OPS_TLS_CA`; see the main README ("mTLS control plane") for generation, mounting, rotation and revocation.
 
 ```
-http://<node host>:31889/app/com.ictrek.mcphub/node-ops/...
+http://<node host>:31889/app/com.ictrek.mcphub/node-ops/...    # legacy token-only, requires MCP_NODE_OPS_REQUIRE_TLS=false
+https://<node host>:31890/app/com.ictrek.mcphub/node-ops/...   # mTLS control plane (default, curl --cert --key --cacert)
 ```
 
-- The host is the machine address V-Scheduler reports for that node; the port is the one above (override with `VOS_MCPHUB_HOST_PORT`); the path prefix is reported back by `GET .../node-ops/health` as `basePath`.
+- The host is the machine address V-Scheduler reports for that node; the ports are the ones above (override with `VOS_MCPHUB_HOST_PORT` / `VOS_MCPHUB_NODE_OPS_PORT`); the path prefix is reported back by `GET .../node-ops/health` as `basePath`.
+- **Upgrade note (breaking):** `MCP_NODE_OPS_REQUIRE_TLS` defaults to `true`, so `/node-ops` on the HTTP port answers `403 tls-required` until certificates are deployed on `/app/data/certs/` (or the variable is explicitly set to `false`). This is fail-closed by design, not an outage.
 - Peer credentials come from `MCP_NODE_TOKENS` on the serving node (see the main README). Without it every `/node-ops` request answers `401` with `code: node-token-missing`.
-- The published port exposes the whole hub, not just `/node-ops`: `/api` still requires sign-in and `/mcp` still requires a VOS token, but restrict reachability to the node network (firewall/security group) rather than leaving it open.
-- Only one MCPHub instance may run per host: the port binding is fixed, and two instances sharing the same `${VOS_APP_STORAGE_PATH}/data` would also fight over the settings file.
+- The published application port exposes the whole hub: `/api` still requires sign-in and `/mcp` still requires a VOS token. The mTLS port serves `/node-ops` only. Restrict reachability of both to the node network (firewall/security group) rather than leaving them open.
+- Only one MCPHub instance may run per host: the port bindings are fixed, and two instances sharing the same `${VOS_APP_STORAGE_PATH}/data` would also fight over the settings file.
 
 ## Language
 

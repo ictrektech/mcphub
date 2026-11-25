@@ -2,6 +2,7 @@ import type { Request, RequestHandler, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import config from '../config/index.js';
 import type { RequestPrincipal } from '../services/authorizationService.js';
+import { NODE_OPS_CN_PATTERN, isTlsRequest, nodeCertIdentityOf } from '../services/nodeOpsTls.js';
 import { hashBearerToken } from '../utils/bearerKeyToken.js';
 import { logger } from '../utils/logger.js';
 import { safeCompare } from '../utils/safeCompare.js';
@@ -133,6 +134,28 @@ const findPeer = (presented: string): NodePeer | undefined => {
 const nodePeerKey = Symbol('nodePeer');
 type RequestWithNodePeer = Request & { [nodePeerKey]?: NodePeer };
 
+// Peers indexed by certificate CN: the client certificate proves *who* the
+// caller is, the token decides *what* it may do (§A-2).
+const peersByName = new Map<string, NodePeer>(
+  [...peersByTokenHash.values()].map((peer) => [peer.name, peer]),
+);
+
+/** true unless explicitly disabled: plain-HTTP /node-ops answers 403 tls-required. */
+const tlsRequired = (): boolean => process.env.MCP_NODE_OPS_REQUIRE_TLS !== 'false';
+
+/** mTLS-only mode: the certificate alone identifies the peer, no Bearer token. */
+const mTlsOnly = (): boolean => process.env.MCP_NODE_MTLS_ONLY === 'true';
+
+const deny = (res: Response, status: number, code: string, message: string): void => {
+  res.status(status).json({ success: false, code, message });
+};
+
+/** Client-cert CN, undefined for plain HTTP, missing certs or malformed CNs. */
+const certCnOf = (req: Request): string | undefined => {
+  const { cn } = nodeCertIdentityOf(req);
+  return cn && NODE_OPS_CN_PATTERN.test(cn) ? cn : undefined;
+};
+
 export const nodePeerOf = (req: Request): NodePeer => {
   const peer = (req as RequestWithNodePeer)[nodePeerKey];
   // Only a request that passed requireNodeToken has a peer. Never re-derive it
@@ -148,41 +171,61 @@ export const peerPrincipal = (peer: NodePeer): RequestPrincipal => ({
 });
 
 export const requireNodeToken = (action: NodeAction | null): RequestHandler => (req, res, next) => {
-  const presented = bearerTokenOf(req);
-  if (!presented) {
-    res.status(401).json({
-      success: false,
-      code: 'node-token-missing',
-      message: 'Node token is required',
-    });
+  // Control-plane gate first: with MCP_NODE_OPS_REQUIRE_TLS=true (default) the
+  // node-ops API never answers on a plain HTTP socket, so bearer tokens cannot
+  // leak by cleartext replay (§A-2, no automatic downgrade).
+  if (tlsRequired() && !isTlsRequest(req)) {
+    deny(res, 403, 'tls-required', 'node-ops requires the mTLS control plane');
     return;
   }
 
-  const peer = findPeer(presented);
-  if (!peer) {
-    res.status(401).json({
-      success: false,
-      code: 'node-token-invalid',
-      message: 'Node token is not valid',
-    });
-    return;
+  const certCn = certCnOf(req);
+
+  let peer: NodePeer | undefined;
+  if (mTlsOnly()) {
+    // Certificate alone: the CN must be a registered peer name.
+    const byCert = certCn ? peersByName.get(certCn) : undefined;
+    if (!byCert) {
+      deny(res, 403, 'node-peer-unknown', 'Client certificate CN is not a registered node peer');
+      return;
+    }
+    peer = byCert;
+  } else {
+    const presented = bearerTokenOf(req);
+    if (!presented) {
+      deny(res, 401, 'node-token-missing', 'Node token is required');
+      return;
+    }
+
+    peer = findPeer(presented);
+    if (!peer) {
+      deny(res, 401, 'node-token-invalid', 'Node token is not valid');
+      return;
+    }
+
+    // Second factor on the TLS listener: the certificate CN must identify the
+    // same peer as the bearer token. On plain HTTP (REQUIRE_TLS=false, the
+    // explicit downgrade) there is no certificate and the A-1 token-only
+    // behaviour applies.
+    if (isTlsRequest(req)) {
+      if (!certCn || !peersByName.has(certCn)) {
+        deny(res, 403, 'node-peer-unknown', 'Client certificate CN is not a registered node peer');
+        return;
+      }
+      if (certCn !== peer.name) {
+        deny(res, 403, 'node-peer-mismatch', 'Client certificate CN does not match the node token');
+        return;
+      }
+    }
   }
 
   if (action !== null && !peer.actions.includes(action)) {
-    res.status(403).json({
-      success: false,
-      code: 'node-action-forbidden',
-      message: `Node token is not authorized for "${action}"`,
-    });
+    deny(res, 403, 'node-action-forbidden', `Node token is not authorized for "${action}"`);
     return;
   }
 
   if (action !== null && WRITE_ACTIONS.has(action) && config.readonly) {
-    res.status(403).json({
-      success: false,
-      code: 'readonly',
-      message: 'MCPHub is running in read-only mode',
-    });
+    deny(res, 403, 'readonly', 'MCPHub is running in read-only mode');
     return;
   }
 

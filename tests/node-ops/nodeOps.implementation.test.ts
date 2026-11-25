@@ -222,6 +222,10 @@ describe('node-ops against the implemented middleware and controller', () => {
       { name: 'read-only', token: READ_TOKEN, actions: ['read'], scope: 'node' },
     ]);
     delete process.env.READONLY;
+    // These tests exercise the A-1 token-only path over plain HTTP (supertest
+    // has no TLS socket), so the §A-2 REQUIRE_TLS gate is explicitly disabled.
+    process.env.MCP_NODE_OPS_REQUIRE_TLS = 'false';
+    delete process.env.MCP_NODE_MTLS_ONLY;
     runtimeConfig.readonly = false;
     jest.resetModules();
     seed();

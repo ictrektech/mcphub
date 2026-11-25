@@ -16,6 +16,7 @@ import { nodePeerOf, peerPrincipal } from '../middlewares/nodeToken.js';
 import { DataService } from '../services/dataService.js';
 import { authorizationService } from '../services/authorizationService.js';
 import { presentServerForPrincipal } from '../services/serverConfigPresenter.js';
+import { nodeCertIdentityOf } from '../services/nodeOpsTls.js';
 import logService from '../services/logService.js';
 import { logger } from '../utils/logger.js';
 import { normalizeServerConfigForPersistence } from '../utils/serverConfigPersistence.js';
@@ -90,6 +91,10 @@ const fail = (
 ): void => {
   res.status(status).json({ success: false, code, message });
 };
+
+// §A-2: every audit line carries the client-cert fingerprint (null on plain HTTP).
+const certFingerprintOf = (req: Request): string | null =>
+  nodeCertIdentityOf(req).fingerprint ?? null;
 
 const pickDefinition = (
   source: Record<string, unknown>,
@@ -238,7 +243,7 @@ export const nodeOpsServerDefinition = async (req: Request, res: Response): Prom
 
   const record = await getServerDao().findById(name);
   if (!record) {
-    auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: false, code: 'server-not-found' });
+    auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: false, code: 'server-not-found', certFingerprint: certFingerprintOf(req) });
     fail(res, 404, 'server-not-found');
     return;
   }
@@ -247,7 +252,7 @@ export const nodeOpsServerDefinition = async (req: Request, res: Response): Prom
   // is refused instead of silently sanitized.
   const presented = presentServerForPrincipal(record, principal);
   if (presented.view !== 'full') {
-    auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: false, code: 'node-scope-forbidden' });
+    auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: false, code: 'node-scope-forbidden', certFingerprint: certFingerprintOf(req) });
     fail(res, 403, 'node-scope-forbidden');
     return;
   }
@@ -256,7 +261,7 @@ export const nodeOpsServerDefinition = async (req: Request, res: Response): Prom
     name,
     definition: pickDefinition(presented.data as unknown as Record<string, unknown>),
   };
-  auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: true });
+  auditNodeAction({ peer: peer.name, action: 'definition', server: name, ok: true, certFingerprint: certFingerprintOf(req) });
   res.json({ success: true, data });
 };
 
@@ -282,12 +287,12 @@ const toggleConnection = async (
 
   const record = await getServerDao().findById(name);
   if (!record) {
-    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'server-not-found' });
+    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'server-not-found', certFingerprint: certFingerprintOf(req) });
     fail(res, 404, 'server-not-found');
     return;
   }
   if (!authorizationService.can('server.manage', record, principal)) {
-    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'node-scope-forbidden' });
+    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'node-scope-forbidden', certFingerprint: certFingerprintOf(req) });
     fail(res, 403, 'node-scope-forbidden');
     return;
   }
@@ -297,7 +302,7 @@ const toggleConnection = async (
   if (!result.success) {
     // Contract error table has no toggle-specific code; fold into invalid-body
     // with the original message preserved.
-    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'invalid-body' });
+    auditNodeAction({ peer: peer.name, action, server: name, ok: false, code: 'invalid-body', certFingerprint: certFingerprintOf(req) });
     fail(res, 400, 'invalid-body', result.message || 'Failed to toggle server connection');
     return;
   }
@@ -314,7 +319,7 @@ const toggleConnection = async (
   // oauth_required is a business state: 200 here, the caller decides next steps.
   const status = await statusOf(name, enabled ? 'connecting' : 'disconnected');
   const data: NodeOpsToggleData = { name, enabled, status };
-  auditNodeAction({ peer: peer.name, action, server: name, ok: true });
+  auditNodeAction({ peer: peer.name, action, server: name, ok: true, certFingerprint: certFingerprintOf(req) });
   res.json({ success: true, data });
 };
 
@@ -329,6 +334,7 @@ export const nodeOpsImportServer = async (req: Request, res: Response): Promise<
       server: typeof body?.name === 'string' ? body.name : '-',
       ok,
       code: code ?? null,
+      certFingerprint: certFingerprintOf(req),
     });
   // Every rejection from a write action leaves one audit line (§3.6).
   const failAudited = (status: number, code: string, message?: string) => {

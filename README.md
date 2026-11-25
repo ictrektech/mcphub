@@ -254,3 +254,54 @@ NODE_OPS_NODE_TOKEN='<no import-stdio, scope=node>' \
 NODE_OPS_READ_TOKEN='<read only, scope=node>' \
 sh scripts/verify-node-ops.sh
 ```
+
+### mTLS control plane (upgrade note: breaking by default)
+
+> **Release note (breaking):** as of the control-plane encryption release,
+> `MCP_NODE_OPS_REQUIRE_TLS` defaults to `true`. Plain-HTTP `/node-ops`
+> requests answer `403 tls-required` immediately after the upgrade. That is
+> the designed fail-closed behaviour, not an outage: deploy certificates (or
+> explicitly set `MCP_NODE_OPS_REQUIRE_TLS=false` to keep the old token-only
+> HTTP mode) before rolling out.
+
+The control plane is a second listener on `MCP_NODE_OPS_PORT` (default
+`31890`) serving **only** `/node-ops` over mutual TLS. The client certificate
+proves *which node* is calling (cert CN must be a registered peer name); the
+bearer token still decides *what it may do*. Set
+`MCP_NODE_MTLS_ONLY=true` to authenticate by certificate alone.
+
+1. **Generate** — on any machine with openssl, one command per node
+   (run once to create the CA, then reuse it with `--ca-key`):
+
+   ```bash
+   scripts/gen-node-certs.sh --node node-a --address 10.0.0.21 --hostname node-a.local --out ./node-certs
+   # second node reuses the CA:
+   scripts/gen-node-certs.sh --node node-b --address 10.0.0.22 --out ./node-certs --ca-key ./node-certs/ca.key
+   ```
+
+2. **Distribute / mount** — per node, put `ca.pem`, `server.crt`, `server.key`
+   into the persistent volume at `/app/data/certs/` and point the process at
+   them (the VOS package maps the port for you):
+
+   ```yaml
+   environment:
+     MCP_NODE_OPS_TLS_CERT: /app/data/certs/server.crt
+     MCP_NODE_OPS_TLS_KEY: /app/data/certs/server.key
+     MCP_NODE_OPS_TLS_CA: /app/data/certs/ca.pem
+     MCP_NODE_OPS_PORT: '31890'      # control-plane port
+     MCPHUB_NODE_NAME: node-a        # must match the peer entry below
+   ```
+
+   `ca.key` stays with whoever administers the PKI; it never belongs on an
+   MCPHub node. Peers dial `https://<node>:31890<BASE_PATH>/node-ops/...` with
+   `curl --cert client.crt --key client.key --cacert ca.pem`.
+
+3. **Rotate** — re-run the generator (or reissue with a new `--days`), replace
+   the three files on the node, restart MCPHub. There is no hot reload by
+   design; tokens rotate independently via `MCP_NODE_TOKENS` + restart.
+
+4. **Revoke** — remove the peer from `MCP_NODE_TOKENS` (certificate trust alone
+   is never sufficient: the cert CN must match a registered peer, so a deleted
+   entry is locked out on the next request even with a valid certificate). To
+   retire a compromised CA, replace `ca.pem` on every node and restart.
+

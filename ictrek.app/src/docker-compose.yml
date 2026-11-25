@@ -21,8 +21,12 @@ x-mcphub-base: &mcphub-base
   # clear of host services; override per deployment with VOS_MCPHUB_HOST_PORT.
   # Only one MCPHub instance may run per host, otherwise the binding collides —
   # which is the intended guard against two instances sharing one data volume.
+  # The second mapping publishes the mTLS node-ops control plane (§A-2); it is
+  # useless without MCP_NODE_OPS_TLS_CERT/KEY/CA but must exist for peers to
+  # dial in at all (REQUIRE_TLS defaults to true, HTTP never serves /node-ops).
   ports:
     - '${VOS_MCPHUB_HOST_PORT:-31889}:3000'
+    - '${VOS_MCPHUB_NODE_OPS_PORT:-31890}:31890'
   volumes:
     - ${VOS_APP_STORAGE_PATH}/data:/app/data
   networks:
