@@ -15,6 +15,14 @@ x-mcphub-base: &mcphub-base
   stop_grace_period: 30s
   security_opt: ['no-new-privileges:true']
   environment: *mcphub-env
+  # Cross-node MCPHub-to-MCPHub access (`<BASE_PATH>/node-ops`) needs a host
+  # reachable port: the VOS Traefik gateway publishes none, so a peer on another
+  # machine cannot reach http://mcphub:3000. Published on a high port to stay
+  # clear of host services; override per deployment with VOS_MCPHUB_HOST_PORT.
+  # Only one MCPHub instance may run per host, otherwise the binding collides —
+  # which is the intended guard against two instances sharing one data volume.
+  ports:
+    - '${VOS_MCPHUB_HOST_PORT:-31889}:3000'
   volumes:
     - ${VOS_APP_STORAGE_PATH}/data:/app/data
   networks:

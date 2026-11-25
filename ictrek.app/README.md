@@ -28,6 +28,19 @@ Other VOS apps join `vos_default`, use the `mcphub:3000` service alias, discover
 
 MCPHub user-level Bearer Keys remain supported on MCP transports; they are not VOS credentials for the integration discovery/identity API. UI copy actions derive the real VOS origin and full app path, rather than advertising localhost addresses.
 
+### Cross-node access (`/node-ops`)
+
+The package publishes the application port on the host as `${VOS_MCPHUB_HOST_PORT:-31889}` so another machine's MCPHub can reach this one. The VOS Traefik gateway publishes no port of its own, so `http://mcphub:3000` only works inside `vos_default`; a peer on a different node needs the published port:
+
+```
+http://<node host>:31889/app/com.ictrek.mcphub/node-ops/...
+```
+
+- The host is the machine address V-Scheduler reports for that node; the port is the one above (override with `VOS_MCPHUB_HOST_PORT`); the path prefix is reported back by `GET .../node-ops/health` as `basePath`.
+- Peer credentials come from `MCP_NODE_TOKENS` on the serving node (see the main README). Without it every `/node-ops` request answers `401` with `code: node-token-missing`.
+- The published port exposes the whole hub, not just `/node-ops`: `/api` still requires sign-in and `/mcp` still requires a VOS token, but restrict reachability to the node network (firewall/security group) rather than leaving it open.
+- Only one MCPHub instance may run per host: the port binding is fixed, and two instances sharing the same `${VOS_APP_STORAGE_PATH}/data` would also fight over the settings file.
+
 ## Language
 
 The VOS interface defaults to following the platform language. It reads `vos_platform.getState().locale` before the first rendered frame and listens for `locale-change` events. Chinese locale variants map to the Chinese translation and English variants map to English; unsupported platform languages fall back to English. The language menu offers **Follow VOS language / English / 中文**. An explicit manual choice persists under the app-specific `mcphub.vos.language` key; choosing automatic mode removes that override and immediately restores the current platform language. Switching languages does not reload the VOS page or interrupt MCP processes.
