@@ -57,8 +57,8 @@ export class DataService {
       // stored value for anything it left out. The previous hard-coded
       // whitelist silently dropped `remoteNodes`, `remoteServerBindings`,
       // `bearerKeys`, `prompts` and `resources`: a full save reported success
-      // while the file kept the old value, so node registration, node-service
-      // bindings and node-ops attach/detach never persisted in file mode.
+      // while the file kept the old value, so node registration never persisted
+      // in file mode.
       const result: McpSettings = { ...all };
       for (const [key, value] of Object.entries(newSettings)) {
         if (key === 'userConfigs' || value === undefined) continue;
