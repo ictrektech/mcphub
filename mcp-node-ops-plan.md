@@ -786,6 +786,8 @@ export function auditNodeAction(entry: {
 
 **禁止**：改 `/node-ops` 既有七个接口的语义（只加 `mcpPath` 一个字段）；新造状态机（接入/断开一律走既有 `connectRemoteServer` / `disconnectRemoteServer`）；引入新依赖；把用户 token 落盘。
 
+> **B-2 的第 3 条（`forwardVosToken`）已由负责人实测否定，改为机器凭据，见 C-2。**
+
 ### Agent C —— 测试、验证与文档
 
 **只准改**：新增 `tests/node-ops/*.test.ts`（Jest 的 `roots` 已含 `<rootDir>/tests`，见 `jest.config.cjs:4`）；新增 `scripts/verify-node-ops.sh`；`README.md` 末尾追加一节。
@@ -795,6 +797,56 @@ export function auditNodeAction(entry: {
 **DoD**：`pnpm test -- tests/node-ops` 全绿；脚本对运行中的 MCPHub 逐条打印 PASS/FAIL。
 
 **禁止**：改 `src/` 下任何文件；发现 bug 报 A 或 B。
+
+---
+
+#### C-2 修复跨节点接入（负责人实测失败后指派，本任务期间 C 可改下列后端文件）
+
+**实测结论（负责人跑的两个真实 hub，走真 mTLS）**：A 能拉到 B 的清单、能建 binding 并落盘，但 **调不到 B 的服务** —— `/api/servers` 里 `demo@node-b` 恒为 `disconnected`、`tools: []`、`error: null`。
+
+已排除 / 已完成：
+
+- ✅ 绑定不落盘（`mergeSettings` 丢键）已由负责人修复，提交 `31fa55c`；
+- ❌ 新建上游不启动；
+- ❌ 认证方式错误（`forwardVosToken` 在无用户请求上下文时拿不到 token）。
+
+**问题 2：新建上游后从不连接**
+
+`src/services/remoteServerRegistrationService.ts` 的 `connectRemoteServer`：`existing` 分支会 `toggleServerStatus(upstreamName, true)`，**新建分支只 `addServer` 就返回**，所以永远是 `disconnected`。
+
+修法：新建分支 `addServer` 成功后同样 `await mcp.toggleServerStatus(upstreamName, true)`，失败按既有方式抛 500。
+
+**问题 3：`forwardVosToken` 走不通（根因）**
+
+`forwardVosToken` 从**请求上下文**取用户 token，而 MCP 握手（initialize / tools/list）发生在**没有用户请求**的时刻，取不到 token。实测 B 的 `/mcp/<name>`：
+
+| 请求 | B 响应 |
+|---|---|
+| 不带 `Authorization` | 401 `No authorization provided` |
+| `Bearer <假 token>` | 401 `Invalid bearer token` |
+| `Bearer <系统 Bearer Key>` | **200，返回合法 initialize**（负责人实测） |
+
+修法：改成 **A 持 B 的专用凭据**。
+
+1. `RemoteNodeConfig`（`src/types/index.ts`）加可选字段 `dataPlaneToken?: string`——B 上签发的 Bearer Key（`POST /api/auth/keys`，`kind: "system"`，用 `accessType` / `allowedServers` 限定只共享允许的服务）。
+2. `connectRemoteServer` 生成的上游配置改为：`headers: { Authorization: "Bearer <node.dataPlaneToken>" }`，**移除 `forwardVosToken`**。
+3. `attachNodeLinkServer`（`src/controllers/remoteNodeController.ts`）：节点没有 `dataPlaneToken` 时返回 400 `data-plane-token-required`，**不要**建一条必然连不上的上游。
+4. 前端 `frontend/src/pages/RemoteNodesPage.tsx`：节点编辑里加"数据面凭据"输入框（密码框、不回显、只写不读），随节点保存；补 `locales/en.json` / `locales/zh.json`。
+5. 凭据只存在 `remoteNodes` 配置里，**不得**出现在日志、接口响应、`/api/servers` 的 config 输出中。
+
+**文件边界（本任务）**：`src/services/remoteServerRegistrationService.ts`、`src/controllers/remoteNodeController.ts`、`src/types/index.ts`、`frontend/src/pages/RemoteNodesPage.tsx`、`locales/*.json`、`tests/**`。
+
+**验收（逐条实测，不许只跑单测）**
+
+1. B 上 `demo`（stdio）在跑；
+2. A 点接入 → 上游 `demo@node-b` 变 `connected`，`tools` 里出现 `hello`；
+3. A 实际调用一次 `hello` → 返回 `hi from B`；
+4. A 点断开 → `disconnected`，工具消失；
+5. B 上 `demo` 进程仍在（只摘聚合，不停服务）；
+6. 节点未配 `dataPlaneToken` 时 attach → 400 `data-plane-token-required`，不产生垃圾上游；
+7. 凭据不出现在 A 的日志、响应体和 `/api/servers` 输出里。
+
+**禁止**：重新引入 `forwardVosToken`；改 `/node-ops` 契约；把凭据落进 `mcpServers`（那是上游配置，不是凭据库）。
 
 ---
 
