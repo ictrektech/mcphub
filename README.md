@@ -215,3 +215,42 @@ Chinese users can also support via WeChat Pay — see [中文版](README.zh.md).
 ## 📄 License
 
 Licensed under the [Apache 2.0 License](LICENSE).
+
+## 🔗 Node-to-Node Operations (`/node-ops`)
+
+An optional, token-gated HTTP interface group for cross-node MCP visibility and soft control. It never touches processes or containers: `enable` / `disable` only change whether this hub connects to a server, and definition export/import copies configuration between hubs. Peer credentials are separate from user accounts and VOS tokens.
+
+Configure peers at startup through `MCP_NODE_TOKENS` (see `mcp-node-ops-plan.md` for the full contract):
+
+```bash
+export MCP_NODE_TOKENS='[
+  {"name":"node-a","token":"<32+ char random string>","actions":["read","logs","definition","control","import","import-stdio"],"scope":"admin"},
+  {"name":"node-b","token":"<32+ char random string>","actions":["read"],"scope":"node"}
+]'
+```
+
+Reachability is a deployment concern: the VOS package publishes the application port on the host (`${VOS_MCPHUB_HOST_PORT:-31889}`), because the VOS gateway itself publishes none — a peer on another node calls `http://<node host>:31889<BASE_PATH>/node-ops/...`. See `ictrek.app/README.md` ("Cross-node access").
+
+The group is mounted at `<BASE_PATH>/node-ops` outside `<BASE_PATH>/api` and requires `Authorization: Bearer <nodeToken>`. Requests without a valid token answer 401 with a `code` (`node-token-missing` / `node-token-invalid`). `actions` are `read`, `logs`, `definition`, `control`, `import`, `import-stdio`; `scope: node` cannot see or export other owners' private servers.
+
+| Method | Path | Action |
+| --- | --- | --- |
+| GET | `/node-ops/health` | valid token |
+| GET | `/node-ops/servers` | `read` |
+| GET | `/node-ops/servers/:name/logs?tail=200` | `logs` |
+| GET | `/node-ops/servers/:name/definition` | `definition` |
+| POST | `/node-ops/servers/:name/enable` | `control` |
+| POST | `/node-ops/servers/:name/disable` | `control` |
+| POST | `/node-ops/servers` | `import` (`import-stdio` for stdio) |
+
+Run the contract suite (it imports the real middleware and controller; only backing services are mocked), then verify a running hub. `BASE_URL` must include the deployment `BASE_PATH`. The script prints PASS/FAIL per check and leaves `verify-*` fixtures behind because `/node-ops` has no DELETE endpoint — it lists the `mcpServers` keys to remove at the end.
+
+```bash
+pnpm test -- tests/node-ops
+
+BASE_URL=http://127.0.0.1:3000/app/com.ictrek.mcphub \
+NODE_OPS_ADMIN_TOKEN='<all actions, scope=admin>' \
+NODE_OPS_NODE_TOKEN='<no import-stdio, scope=node>' \
+NODE_OPS_READ_TOKEN='<read only, scope=node>' \
+sh scripts/verify-node-ops.sh
+```
