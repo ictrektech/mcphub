@@ -61,7 +61,9 @@ def main():
             try:
                 if api('/config')['data']['vosAuthEnabled']:
                     break
-            except (HTTPError, URLError, AssertionError, ValueError):
+            except (HTTPError, URLError, AssertionError, ValueError, TimeoutError):
+                # TimeoutError is not a URLError in Python 3.10+: a single slow
+                # response (first boot, cold cache) must retry, not crash.
                 time.sleep(1)
         else:
             raise RuntimeError('VOS image did not become ready')

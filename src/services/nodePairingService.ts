@@ -9,7 +9,7 @@
 // token. Everything after the pairing (mTLS handshake, action checks) keeps
 // the §A-2 model untouched.
 
-import { randomBytes, randomInt } from 'node:crypto';
+import { generateKeyPairSync, randomBytes, randomInt } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import os from 'node:os';
@@ -58,6 +58,23 @@ const SANsFor = (commonName: string): string[] => {
   return [...names];
 };
 
+/** RSA keygen via Node's native crypto: millisecond-scale C++ instead of the
+ * multi-second pure-JS forge keygen, which would block the event loop and
+ * stall the whole server during first-boot bootstrap. */
+const generateRsaKeys = (): { publicKeyPem: string; privateKeyPem: string } => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: KEY_SIZE_BITS,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  return { publicKeyPem: publicKey, privateKeyPem: privateKey };
+};
+
+const keyPairFromPems = (publicKeyPem: string, privateKeyPem: string): forge.pki.KeyPair => ({
+  publicKey: forge.pki.publicKeyFromPem(publicKeyPem),
+  privateKey: forge.pki.privateKeyFromPem(privateKeyPem),
+});
+
 const generateCertificate = (input: {
   commonName: string;
   publicKey: forge.pki.PublicKey;
@@ -65,8 +82,7 @@ const generateCertificate = (input: {
   issuerKeys?: forge.pki.KeyPair;
   sans?: string[];
   clientAuth?: boolean;
-}): { cert: forge.pki.Certificate; privateKeyPem: string } => {
-  const keys = forge.pki.rsa.generateKeyPair(KEY_SIZE_BITS);
+}): forge.pki.Certificate => {
   const cert = forge.pki.createCertificate();
   cert.publicKey = input.publicKey;
   cert.serialNumber = randomBytes(8).toString('hex');
@@ -105,9 +121,11 @@ const generateCertificate = (input: {
     });
   }
   cert.setExtensions(extensions);
-  const signer = issuerCert && input.issuerKeys ? input.issuerKeys.privateKey : keys.privateKey;
-  cert.sign(signer, forge.md.sha256.create());
-  return { cert, privateKeyPem: forge.pki.privateKeyToPem(keys.privateKey) };
+  if (!issuerCert || !input.issuerKeys) {
+    throw new Error('generateCertificate requires an issuer certificate and key');
+  }
+  cert.sign(input.issuerKeys.privateKey, forge.md.sha256.create());
+  return cert;
 };
 
 export interface BootstrapResult extends NodeOpsTlsMaterials {
@@ -143,8 +161,9 @@ export const ensureNodePki = async (): Promise<BootstrapResult> => {
   const name = nodeDisplayName();
   logger.info('[node-ops] no control-plane PKI found; generating one', { dir, name });
 
-  // CA (self-signed, keyCertSign).
-  const caKeys = forge.pki.rsa.generateKeyPair(KEY_SIZE_BITS);
+  // CA (self-signed, keyCertSign). Native keygen: fast and non-blocking.
+  const caKeyPems = generateRsaKeys();
+  const caKeys = keyPairFromPems(caKeyPems.publicKeyPem, caKeyPems.privateKeyPem);
   const caCert = forge.pki.createCertificate();
   caCert.publicKey = caKeys.publicKey;
   caCert.serialNumber = randomBytes(8).toString('hex');
@@ -160,7 +179,8 @@ export const ensureNodePki = async (): Promise<BootstrapResult> => {
   caCert.sign(caKeys.privateKey, forge.md.sha256.create());
 
   // Server certificate: CN + SANs so peers can dial by IP or hostname.
-  const serverKeys = forge.pki.rsa.generateKeyPair(KEY_SIZE_BITS);
+  const serverKeyPems = generateRsaKeys();
+  const serverKeys = keyPairFromPems(serverKeyPems.publicKeyPem, serverKeyPems.privateKeyPem);
   const serverCert = forge.pki.createCertificate();
   serverCert.publicKey = serverKeys.publicKey;
   serverCert.serialNumber = randomBytes(8).toString('hex');
@@ -183,7 +203,8 @@ export const ensureNodePki = async (): Promise<BootstrapResult> => {
 
   // Self client certificate: lets this hub pair OUT to peers by presenting a
   // credential signed with our own CA when the peer trusts us reciprocally.
-  const clientKeys = forge.pki.rsa.generateKeyPair(KEY_SIZE_BITS);
+  const clientKeyPems = generateRsaKeys();
+  const clientKeys = keyPairFromPems(clientKeyPems.publicKeyPem, clientKeyPems.privateKeyPem);
   const clientCert = forge.pki.createCertificate();
   clientCert.publicKey = clientKeys.publicKey;
   clientCert.serialNumber = randomBytes(8).toString('hex');
@@ -198,21 +219,23 @@ export const ensureNodePki = async (): Promise<BootstrapResult> => {
   ]);
   clientCert.sign(caKeys.privateKey, forge.md.sha256.create());
 
+  const serverKeyPem = forge.pki.privateKeyToPem(serverKeys.privateKey);
+  const clientKeyPem = forge.pki.privateKeyToPem(clientKeys.privateKey);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   await writeFile(paths.ca, toPem(caCert), { mode: 0o644 });
   await writeFile(paths.caKey, forge.pki.privateKeyToPem(caKeys.privateKey), { mode: 0o600 });
   await writeFile(paths.serverCert, toPem(serverCert), { mode: 0o644 });
-  await writeFile(paths.serverKey, forge.pki.privateKeyToPem(serverKeys.privateKey), { mode: 0o600 });
+  await writeFile(paths.serverKey, serverKeyPem, { mode: 0o600 });
   await writeFile(paths.clientCert, toPem(clientCert), { mode: 0o644 });
-  await writeFile(paths.clientKey, forge.pki.privateKeyToPem(clientKeys.privateKey), { mode: 0o600 });
+  await writeFile(paths.clientKey, clientKeyPem, { mode: 0o600 });
   logger.log(`[node-ops] control-plane PKI generated in ${dir} (CN=${name})`);
 
   return {
     ca: Buffer.from(toPem(caCert)),
     cert: Buffer.from(toPem(serverCert)),
-    key: Buffer.from(forge.pki.privateKeyToPem(serverKeys.privateKey)),
+    key: Buffer.from(serverKeyPem),
     clientCertPem: toPem(clientCert),
-    clientKeyPem: forge.pki.privateKeyToPem(clientKeys.privateKey),
+    clientKeyPem,
     generated: true,
   };
 };
@@ -268,7 +291,7 @@ export const pairPeer = async (input: { code: string; cn: string; publicKeyPem: 
       { status: 503 },
     );
   }
-  const { cert } = generateCertificate({
+  const cert = generateCertificate({
     commonName: input.cn,
     publicKey,
     issuerCertificate: caCert,
