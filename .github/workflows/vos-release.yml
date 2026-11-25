@@ -99,10 +99,23 @@ jobs:
           detail = record.get('data') or {}
           archive = detail.get('app_tar_gz') or {}
           expected = f'appstore/apps/{app_id}/{version}/app.tar.gz'
-          if (record.get('code') != 0 or detail.get('id') != app_id
-                  or detail.get('current_version') != version or version not in detail.get('versions', [])
-                  or archive.get('download_path') != expected or archive.get('size', 0) <= 0):
-              raise SystemExit('Published App Store record does not match the release')
+          problems = []
+          if record.get('code') != 0:
+              problems.append(f"code={record.get('code')!r}")
+          if detail.get('id') != app_id:
+              problems.append(f"id={detail.get('id')!r}")
+          if detail.get('current_version') != version:
+              problems.append(f"current_version={detail.get('current_version')!r}")
+          if version not in detail.get('versions', []):
+              problems.append(f"versions={detail.get('versions')!r}")
+          if archive.get('download_path') != expected:
+              problems.append(f"download_path={archive.get('download_path')!r}")
+          if archive.get('size', 0) <= 0:
+              problems.append(f"size={archive.get('size')!r}")
+          if problems:
+              print('expected version:', version)
+              print('app store record:', json.dumps(detail, ensure_ascii=False)[:3000])
+              raise SystemExit('Published App Store record does not match the release: ' + ', '.join(problems))
           probe = urllib.request.Request(f'{base}/store/{expected}', headers={'Range': 'bytes=0-1'})
           with urllib.request.urlopen(probe, timeout=30) as result:
               if result.read(2) != b'\x1f\x8b':
