@@ -53,13 +53,17 @@ export class DataService {
     // Use passed user parameter if available, otherwise fall back to context
     const currentUser = user || UserContextService.getInstance().getCurrentUser();
     if (!currentUser || currentUser.isAdmin) {
-      const result = { ...all };
-      result.mcpServers = newSettings.mcpServers;
-      result.users = newSettings.users;
-      result.systemConfig = newSettings.systemConfig;
-      result.groups = newSettings.groups;
-      result.oauthClients = newSettings.oauthClients;
-      result.oauthTokens = newSettings.oauthTokens;
+      // Copy every top-level key the caller actually supplied, and keep the
+      // stored value for anything it left out. The previous hard-coded
+      // whitelist silently dropped `remoteNodes`, `remoteServerBindings`,
+      // `bearerKeys`, `prompts` and `resources`: a full save reported success
+      // while the file kept the old value, so node registration, node-service
+      // bindings and node-ops attach/detach never persisted in file mode.
+      const result: McpSettings = { ...all };
+      for (const [key, value] of Object.entries(newSettings)) {
+        if (key === 'userConfigs' || value === undefined) continue;
+        (result as unknown as Record<string, unknown>)[key] = value;
+      }
       return result;
     } else {
       const result = JSON.parse(JSON.stringify(all));
