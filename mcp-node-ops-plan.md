@@ -104,6 +104,7 @@ http://<host>:<port><BASE_PATH>/node-ops/...
 - **不挂到 `authenticatedRouter`，不进 `${BASE_PATH}/api`**：`${BASE_PATH}/api` 在 `src/middlewares/index.ts:106` 被全局 `auth` 整段接管，node token 的中间件在那里永远执行不到。
 - 顺序安全：SPA 通配 `${BASE_PATH}/*` 在 `findAndServeFrontend()` 里注册，晚于 `initRoutes`（`src/server.ts:136-137` 与 `:237-253`）；`/:user/mcp`、`/:user/sse` 不匹配 `/node-ops/...`。
 - 副本模式下 `replicaRequestContext` 是 app 级中间件（`src/server.ts:71`），drain 时的 503 自动生效，无需额外处理。
+- 控制面加密（mTLS 端口、证书、环境变量、拒绝行为）见 §4「Agent A · A-2」；默认 `MCP_NODE_OPS_REQUIRE_TLS=true`，HTTP 端口上的 `/node-ops` 一律 403。
 
 #### 3.2.1 跨节点连通性（部署侧要求，代码不解决）
 
@@ -572,15 +573,74 @@ curl -s -H "Authorization: Bearer $TOK" "$BASE/node-ops/servers/amap/definition"
 
 ### Agent A —— 接口与控制面
 
-**只准改**：新增 `src/controllers/nodeOpsController.ts`；`src/routes/index.ts`（仅追加 import 与 `app.*` 行）；`src/types/index.ts`（仅追加类型）。
+**只准改**（A-1 已交付 + A-2 新增）：
 
-**DoD**：§3.4 七个接口字段一致；权限矩阵逐条生效；`pnpm backend:build` 通过；`git diff --stat` 不越界。
+- 新增 `src/controllers/nodeOpsController.ts`（已交付）
+- `src/routes/index.ts`（仅追加 import 与 `app.*` 行）
+- `src/types/index.ts`（仅追加类型）
+- **A-2 新增** `src/services/nodeOpsTls.ts`
+- **A-2 新增** `scripts/gen-node-certs.sh`
+- **A-2 追加** `src/server.ts`（仅追加"证书存在时另起 TLS 监听"的十余行，不改既有 HTTP 行为）
+- **A-2 移交** `src/middlewares/nodeToken.ts`（本任务期间由 A 维护；B 不再改动，见 B 节）
 
-**禁止**：改既有 controller / 中间件；加依赖；自己实现状态机。
+**DoD（A-1）**：§3.4 七个接口字段一致；权限矩阵逐条生效；`pnpm backend:build` 通过；`git diff --stat` 不越界。
+
+**禁止**：改既有 controller / `auth.ts` / `middlewares/index.ts` / `betterAuthConfig.ts`；加依赖；自己实现状态机。
+
+---
+
+#### A-2 控制面加密（mTLS）—— 本轮必须交付
+
+**问题**：现在 A 调 B 是明文 HTTP + `Authorization: Bearer` 头，谁抓到包谁就能以该 peer 身份读定义（含 env 密钥）、启停、导入、上传代码。内网 + 防火墙是权宜，不能作为设计。
+
+**目标**：控制面单独一个 mTLS 端口；证书证明"你是哪个节点"，token 只负责"你能做哪些动作"。传输加密与授权分离。
+
+**契约（冻结）**
+
+| 项 | 值 |
+|---|---|
+| 端口 | `MCP_NODE_OPS_PORT`，默认 **31890** |
+| 证书 | 由 `MCP_NODE_OPS_TLS_CERT` / `..._KEY` / `..._CA` 指向三个文件；三者缺一 → 不启用 TLS 监听，打一条 warn，且 HTTP 端口上的 `/node-ops` 全部 403 |
+| 身份 | 对端 **client cert 的 CN** = peer 名（`^[A-Za-z0-9._:-]{1,64}$`） |
+| 第二因子 | 默认仍要求 `Authorization: Bearer <token>` 且该 token 的 peer 名必须与证书 CN 一致；`MCP_NODE_MTLS_ONLY=true` 时只认证书 |
+| 明文回退 | `MCP_NODE_OPS_REQUIRE_TLS=true`（默认）时，`/node-ops` 在 HTTP 端口上 403 `tls-required`，不得降级 |
+| 证书目录（部署侧） | `/app/data/certs/{ca.pem,server.crt,server.key,client.crt,client.key}`，在持久卷内 |
+| 审计 | 每条审计追加 `certFingerprint`（client cert 的 sha256 前 16 位 hex）；token 与私钥永不入日志 |
+
+**拒绝行为（逐条要有测试）**
+
+| 场景 | 结果 |
+|---|---|
+| HTTP 端口访问 `/node-ops/*`（REQUIRE_TLS=true） | 403 `tls-required` |
+| TLS 端口、无 client cert | TLS 握手阶段拒绝（`rejectUnauthorized`），连接不到 handler |
+| 证书 CN 未在 `MCP_NODE_TOKENS` 登记 | 403 `node-peer-unknown` |
+| 证书 CN 与 Bearer token 所属 peer 不一致 | 403 `node-peer-mismatch` |
+| 证书 CN 正常、token 的 action 不足 | 403 `node-action-forbidden`（沿用既有 code） |
+| 证书 + token 均正常 | 200，行为与 A-1 完全一致 |
+
+**实现要点**
+
+- `nodeOpsTls.ts` 负责：读证书、`https.createServer({ key, cert, ca, requestCert: true, rejectUnauthorized: true }, app)`、`getPeerCertificate()` 取 CN 与指纹、缺文件时的降级判定。复用同一个 express `app`，不另写业务路由。
+- `server.ts` 只加"若证书齐全则 `listen(MCP_NODE_OPS_PORT)`"，并在启动日志里打一行 `node-ops control plane listening on :31890 (mTLS)`。
+- `nodeToken.ts` 调整：优先用证书 CN 定位 peer；`requireNodeToken` 增加明文来源拦截；保持既有导出签名不变（`nodePeerOf` / `peerPrincipal` / `nodeOpsRateLimiter` / `auditNodeAction` 不改形状）。
+- `gen-node-certs.sh`：一条命令生成 CA + 每节点 server/client 证书（`CN=<节点名>`，server SAN 含 `IP:<地址>,DNS:<主机名>`），并打印对应的环境变量与挂载路径。有效期默认 365 天，脚本支持 `--days`。
+
+**DoD**
+
+- 六个拒绝场景逐条有自动化测试；证书 + token 的正常链路与 A-1 行为一致。
+- `pnpm backend:build`、`pnpm test -- tests/node-ops`、`node scripts/verify-dist.js` 全过。
+- 手写验证：`curl --cert --key --cacert https://B:31890/.../node-ops/health` → 200；同一请求去掉证书 → 握手失败；换成 `http://B:31889/.../node-ops/health` → 403 `tls-required`。
+- 文档补一节：证书生成、分发、轮转（换文件 + 重启）、吊销（从 `MCP_NODE_TOKENS` 删 peer）。
+
+**不做**：自研加密、应用层 HMAC 签名、token 加密传输（TLS 已覆盖）；不做 mTLS 的自动降级。
+
+**后续（不在本轮）**：`PUT /node-ops/packages/...`（复用 `/api/mcpb/upload` 的 handler，动作 `package`）必须挂在这同一个 TLS 监听器上，不允许给 `/api` 开机器凭据口子。
 
 ### Agent B —— 鉴权、限流、审计
 
 **只准改**：新增 `src/middlewares/nodeToken.ts`、`src/utils/nodeAudit.ts`。
+
+> **A-2 期间的文件移交**：`src/middlewares/nodeToken.ts` 转由 Agent A 维护（mTLS 的 CN 识别、明文拦截都在这个文件里）。B 不再改动它；若 B 需要调整审计字段，只改 `src/utils/nodeAudit.ts`，不得与 A 同时改 `nodeToken.ts`。
 
 **冻结签名**
 
