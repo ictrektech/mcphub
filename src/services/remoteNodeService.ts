@@ -65,9 +65,16 @@ const validateId = (id: string): string => {
 
 export const listRemoteNodes = (): RemoteNodeView[] => readNodes();
 
+const requireAddress = (address?: string, hostname?: string): void => {
+  if (!address?.trim() && !hostname?.trim()) {
+    throw new RemoteNodeError('address (or hostname) is required', 400);
+  }
+};
+
 export const createRemoteNode = (input: Omit<RemoteNodeConfig, 'createdAt'>): RemoteNodeView => {
   const id = validateId(input.id);
   if (!input.name?.trim()) throw new RemoteNodeError('name is required', 400);
+  requireAddress(input.address, input.hostname);
   const nodes = readNodes();
   if (nodes.some((node) => node.id === id)) {
     throw new RemoteNodeError(`Remote node '${id}' already exists`, 409);
@@ -90,6 +97,7 @@ export const updateRemoteNode = (id: string, patch: Partial<RemoteNodeConfig>): 
   const existing = nodes[index];
   const next: RemoteNodeConfig = { ...existing, ...patch, id };
   if (!next.name?.trim()) throw new RemoteNodeError('name is required', 400);
+  requireAddress(next.address, next.hostname);
   next.name = next.name.trim();
   nodes[index] = next;
   writeNodes(nodes);

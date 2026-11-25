@@ -47,3 +47,7 @@ temp-test-config/
 # OAuth consent grants (runtime state, excluded from configuration exports)
 *.approvals.json
 *.approvals.json.*.tmp
+
+# Node pairing scratch PKI (private keys — never commit)
+pki/
+tsconfig.tsbuildinfo

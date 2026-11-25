@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import config from '../config/index.js';
 import type { RequestPrincipal } from '../services/authorizationService.js';
 import { NODE_OPS_CN_PATTERN, isTlsRequest, nodeCertIdentityOf } from '../services/nodeOpsTls.js';
+import { pairedPeersSnapshot } from '../services/nodePeerRegistry.js';
 import { hashBearerToken } from '../utils/bearerKeyToken.js';
 import { logger } from '../utils/logger.js';
 import { safeCompare } from '../utils/safeCompare.js';
@@ -115,6 +116,20 @@ const parseNodePeers = (raw: string | undefined): Map<string, NodePeer> => {
 
 const peersByTokenHash = parseNodePeers(process.env.MCP_NODE_TOKENS);
 
+/** Peers admitted through the pairing flow (§9): persisted, mtime-cached,
+ * effective without a restart. They always carry the full action set. */
+const pairedPeersByName = (): Map<string, NodePeer> => {
+  const map = new Map<string, NodePeer>();
+  for (const record of pairedPeersSnapshot()) {
+    map.set(record.name, {
+      name: record.name,
+      actions: record.actions as NodeAction[],
+      scope: 'admin',
+    });
+  }
+  return map;
+};
+
 const bearerTokenOf = (req: Request): string | undefined => {
   const header = req.get('authorization');
   if (!header) return undefined;
@@ -128,6 +143,12 @@ const findPeer = (presented: string): NodePeer | undefined => {
     // safeCompare uses timingSafeEqual and keeps the comparison length-stable.
     if (safeCompare(storedHash, presentedHash)) return peer;
   }
+  // Paired peers are keyed by name; hash-compare their stored digest.
+  for (const record of pairedPeersSnapshot()) {
+    if (safeCompare(record.tokenHash, presentedHash)) {
+      return { name: record.name, actions: record.actions as NodeAction[], scope: 'admin' };
+    }
+  }
   return undefined;
 };
 
@@ -135,10 +156,15 @@ const nodePeerKey = Symbol('nodePeer');
 type RequestWithNodePeer = Request & { [nodePeerKey]?: NodePeer };
 
 // Peers indexed by certificate CN: the client certificate proves *who* the
-// caller is, the token decides *what* it may do (§A-2).
-const peersByName = new Map<string, NodePeer>(
-  [...peersByTokenHash.values()].map((peer) => [peer.name, peer]),
-);
+// caller is, the token decides *what* it may do (§A-2). Static env peers and
+// dynamically paired peers are merged per lookup so pairing needs no restart.
+const peersByName = (): Map<string, NodePeer> => {
+  const map = new Map<string, NodePeer>(
+    [...peersByTokenHash.values()].map((peer) => [peer.name, peer]),
+  );
+  for (const [name, peer] of pairedPeersByName()) map.set(name, peer);
+  return map;
+};
 
 /** true unless explicitly disabled: plain-HTTP /node-ops answers 403 tls-required. */
 const tlsRequired = (): boolean => process.env.MCP_NODE_OPS_REQUIRE_TLS !== 'false';
@@ -184,7 +210,7 @@ export const requireNodeToken = (action: NodeAction | null): RequestHandler => (
   let peer: NodePeer | undefined;
   if (mTlsOnly()) {
     // Certificate alone: the CN must be a registered peer name.
-    const byCert = certCn ? peersByName.get(certCn) : undefined;
+    const byCert = certCn ? peersByName().get(certCn) : undefined;
     if (!byCert) {
       deny(res, 403, 'node-peer-unknown', 'Client certificate CN is not a registered node peer');
       return;
@@ -208,7 +234,7 @@ export const requireNodeToken = (action: NodeAction | null): RequestHandler => (
     // explicit downgrade) there is no certificate and the A-1 token-only
     // behaviour applies.
     if (isTlsRequest(req)) {
-      if (!certCn || !peersByName.has(certCn)) {
+      if (!certCn || !peersByName().has(certCn)) {
         deny(res, 403, 'node-peer-unknown', 'Client certificate CN is not a registered node peer');
         return;
       }

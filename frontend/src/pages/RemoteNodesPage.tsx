@@ -63,8 +63,6 @@ const emptyForm = {
   dataPlaneToken: '',
 };
 
-const emptyServerForm = { name: '', address: '' };
-
 const RemoteNodesPage: React.FC = () => {
   const { t } = useTranslation();
   const { auth } = useAuth();
@@ -78,11 +76,11 @@ const RemoteNodesPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [servers, setServers] = useState<Record<string, RemoteServer[]>>({});
-  const [serverForms, setServerForms] = useState<Record<string, { name: string; address: string }>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [peerServers, setPeerServers] = useState<Record<string, NodeLinkServer[]>>({});
   const [peerErrors, setPeerErrors] = useState<Record<string, string>>({});
   const [peerLoading, setPeerLoading] = useState<Record<string, boolean>>({});
+  const [pairing, setPairing] = useState<Record<string, boolean>>({});
   const [credentialConfigured, setCredentialConfigured] = useState(false);
 
   const load = useCallback(async () => {
@@ -153,6 +151,10 @@ const RemoteNodesPage: React.FC = () => {
     event.preventDefault();
     setError('');
     setNotice('');
+    if (!form.address.trim() && !form.hostname.trim()) {
+      setError(t('remoteNodes.addressRequired'));
+      return;
+    }
     const payload = {
       id: form.id.trim(),
       name: form.name.trim(),
@@ -252,23 +254,6 @@ const RemoteNodesPage: React.FC = () => {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
 
-  const registerServer = async (node: RemoteNode) => {
-    const formValue = serverForms[node.id] ?? emptyServerForm;
-    setError('');
-    setNotice('');
-    const result = await apiPost<ApiResult<RemoteServer>>(`/remote-nodes/${encodeURIComponent(node.id)}/servers`, {
-      name: formValue.name.trim(),
-      address: formValue.address.trim(),
-    });
-    if (result.success) {
-      setNotice(t('remoteNodes.serviceAdded'));
-      setServerForms((current) => ({ ...current, [node.id]: { ...emptyServerForm } }));
-      await loadServers(node.id);
-    } else {
-      setError(result.message ?? t('remoteNodes.serviceSaveFailed'));
-    }
-  };
-
   const toggleServer = async (node: RemoteNode, server: RemoteServer, enabled: boolean) => {
     if (!enabled && !window.confirm(t('remoteNodes.confirmDisconnect', { name: server.serverName }))) return;
     setError('');
@@ -314,6 +299,25 @@ const RemoteNodesPage: React.FC = () => {
     } else {
       setError(result.message ?? t(peer.attached ? 'remoteNodes.detachFailed' : 'remoteNodes.attachFailed'));
     }
+  };
+
+  // §9 自动配对: one click — the hub mints/exchanges the pairing code with the
+  // peer and stores the certificate + control token; no manual provisioning.
+  const pairNode = async (node: RemoteNode) => {
+    setPairing((current) => ({ ...current, [node.id]: true }));
+    setError('');
+    setNotice('');
+    const result = await apiPost<ApiResult<{ paired: boolean }>>(
+      `/remote-nodes/${encodeURIComponent(node.id)}/pair`,
+      {},
+    );
+    if (result.success) {
+      setNotice(t('remoteNodes.paired'));
+      await loadPeerServers(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.pairFailed'));
+    }
+    setPairing((current) => ({ ...current, [node.id]: false }));
   };
 
   const field = (key: keyof typeof form, label: string, placeholder?: string) => (
@@ -442,9 +446,18 @@ const RemoteNodesPage: React.FC = () => {
                 <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--hub-border)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-[13px] font-medium">{t('remoteNodes.peerServices')}</h3>
-                    <button className="hub-btn sm" onClick={() => void loadPeerServers(node.id)}>
-                      {t('remoteNodes.peerRefresh')}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        className="hub-btn primary sm"
+                        disabled={pairing[node.id]}
+                        onClick={() => void pairNode(node)}
+                      >
+                        {pairing[node.id] ? t('common.loading') : t('remoteNodes.pair')}
+                      </button>
+                      <button className="hub-btn sm" onClick={() => void loadPeerServers(node.id)}>
+                        {t('remoteNodes.peerRefresh')}
+                      </button>
+                    </div>
                   </div>
                   {peerErrors[node.id] ? (
                     <p className="text-[12px] mb-3" style={{ color: 'var(--hub-err)' }}>{peerErrors[node.id]}</p>
@@ -509,30 +522,6 @@ const RemoteNodesPage: React.FC = () => {
                       ))}
                     </div>
                   )}
-
-                  <div className="flex flex-col md:flex-row gap-2">
-                    <input
-                      className="hub-input flex-1"
-                      placeholder={t('remoteNodes.serviceName')}
-                      value={(serverForms[node.id] ?? emptyServerForm).name}
-                      onChange={(event) => setServerForms((current) => ({
-                        ...current,
-                        [node.id]: { ...(current[node.id] ?? emptyServerForm), name: event.target.value },
-                      }))}
-                    />
-                    <input
-                      className="hub-input flex-1"
-                      placeholder={t('remoteNodes.serviceAddressHint')}
-                      value={(serverForms[node.id] ?? emptyServerForm).address}
-                      onChange={(event) => setServerForms((current) => ({
-                        ...current,
-                        [node.id]: { ...(current[node.id] ?? emptyServerForm), address: event.target.value },
-                      }))}
-                    />
-                    <button className="hub-btn primary" onClick={() => void registerServer(node)}>
-                      {t('remoteNodes.registerService')}
-                    </button>
-                  </div>
                 </div>
               )}
             </section>

@@ -202,11 +202,13 @@ import {
 } from '../services/betterAuthConfig.js';
 import {
   addRemoteNode,
-  addRemoteServer,
   attachNodeLinkServer,
   detachNodeLinkServer,
   deleteNodeCredential,
   discoverFromScheduler,
+  newNodePairingCode,
+  pairRemoteNode,
+  pairWithNode,
   editRemoteNode,
   getNodeCredential,
   getRemoteNodes,
@@ -326,7 +328,10 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.put('/remote-nodes/:id', requireAdminMiddleware, editRemoteNode);
   authenticatedRouter.delete('/remote-nodes/:id', requireAdminMiddleware, removeRemoteNode);
   authenticatedRouter.get('/remote-nodes/:id/servers', requireAdminMiddleware, getRemoteServers);
-  authenticatedRouter.post('/remote-nodes/:id/servers', requireAdminMiddleware, addRemoteServer);
+  // §9 自动配对: one-click pairing (mint code on the peer + exchange + persist).
+  authenticatedRouter.post('/remote-nodes/:id/pair', requireAdminMiddleware, pairRemoteNode);
+  // B side of pairing: admin mints the one-time code a peer may redeem once.
+  authenticatedRouter.post('/node-ops-pairing-code', requireAdminMiddleware, newNodePairingCode);
   authenticatedRouter.post(
     '/remote-nodes/:id/servers/:name/toggle',
     requireAdminMiddleware,
@@ -674,6 +679,11 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   );
   app.post(`${config.basePath}/node-ops/servers`, nodeOpsRateLimiter, requireNodeToken('import'), nodeOpsImportServer);
   app.all(`${config.basePath}/node-ops/*`, nodeOpsRateLimiter, nodeOpsNotFound);
+
+  // §9 自动配对: one-time pairing exchange. Public on the HTTP port but guarded
+  // by a short-lived one-time code minted through the admin API, so no
+  // certificate provisioning is needed before two hubs can trust each other.
+  app.post(`${config.basePath}/node-pair`, nodeOpsRateLimiter, pairWithNode);
 
   // OpenAPI generation endpoints
   app.get(`${config.basePath}/api/openapi.json`, getOpenAPISpec);

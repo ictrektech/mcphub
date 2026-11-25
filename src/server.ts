@@ -38,6 +38,7 @@ import type { Socket } from 'net';
 import { mcpConnectionRateLimiter, spaPageRateLimiter } from './utils/rateLimit.js';
 import { closeHttpServer } from './utils/serverShutdown.js';
 import { startNodeDataTlsServer, startNodeOpsTlsServer } from './services/nodeOpsTls.js';
+import { ensureNodePki } from './services/nodePairingService.js';
 import { logger } from './utils/logger.js';
 
 /**
@@ -283,14 +284,25 @@ export class AppServer {
       socket.once('close', () => this.connections.delete(socket));
     });
 
-    // §A-2: node-ops control plane — a second, mTLS-only listener serving the
-    // same express app. Started only when all three certificate files exist;
-    // without them no TLS listener is created and the REQUIRE_TLS gate in
+    // §A-2 + §9: node-ops control plane — a second, mTLS-only listener serving
+    // the same express app. Certificates are bootstrapped automatically on
+    // first start (persistent volume); env-provided paths still take priority.
+    // If bootstrap fails the listeners stay down and the REQUIRE_TLS gate in
     // nodeToken.ts keeps every /node-ops request on the HTTP port at 403.
-    startNodeOpsTlsServer(this.app);
-    // Data-plane TLS for peer /mcp calls; uses the same server certificate but
-    // does not require a client certificate (the MCP SDK cannot present one).
-    startNodeDataTlsServer(this.app);
+    void ensureNodePki()
+      .then((result) => {
+        if (result.generated) {
+          logger.log('[node-ops] control plane ready (bootstrap PKI)');
+        }
+        startNodeOpsTlsServer(this.app);
+        // Data-plane TLS for peer /mcp calls; uses the same server certificate
+        // but does not require a client certificate (the MCP SDK cannot
+        // present one).
+        startNodeDataTlsServer(this.app);
+      })
+      .catch((error) => {
+        logger.error('[node-ops] PKI bootstrap failed; control plane disabled.', { error });
+      });
   }
 
   /**

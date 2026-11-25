@@ -7,12 +7,20 @@
 
 import fs from 'node:fs';
 import https from 'node:https';
+import { join } from 'node:path';
 import type { TLSSocket } from 'node:tls';
 import express, { type Application, type Request } from 'express';
 import config from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 export const NODE_OPS_CN_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
+
+/** Persistent volume directory holding the control-plane PKI. This is where
+ * the §9 bootstrap writes ca.pem / server.crt / server.key / ca.key on first
+ * start; explicit env vars (MCP_NODE_OPS_TLS_*) still take precedence. */
+export const certsDir = (): string =>
+  process.env.MCP_NODE_OPS_CERT_DIR
+  || join(process.env.MCP_NODE_SECRETS_DIR || '/app/data', 'certs');
 
 export interface NodeOpsTlsMaterials {
   key: Buffer;
@@ -26,15 +34,16 @@ const envFile = (name: string): string | undefined => {
 };
 
 /**
- * Loads the three certificate files. Any missing/unreadable file means the
- * control plane does not start (§A-2: no automatic downgrade); callers must
- * leave the HTTP-port behaviour to the REQUIRE_TLS gate in nodeToken.ts.
+ * Loads the three certificate files. Env-provided paths win; without them the
+ * §9 bootstrap directory (/app/data/certs by default) is used, so a
+ * self-bootstrapped hub needs zero configuration. Any missing/unreadable file
+ * means the control plane does not start (no automatic downgrade); callers
+ * must leave the HTTP-port behaviour to the REQUIRE_TLS gate in nodeToken.ts.
  */
 export const resolveNodeOpsTlsMaterials = (): NodeOpsTlsMaterials | null => {
-  const certPath = envFile('MCP_NODE_OPS_TLS_CERT');
-  const keyPath = envFile('MCP_NODE_OPS_TLS_KEY');
-  const caPath = envFile('MCP_NODE_OPS_TLS_CA');
-  if (!certPath || !keyPath || !caPath) return null;
+  const certPath = envFile('MCP_NODE_OPS_TLS_CERT') ?? join(certsDir(), 'server.crt');
+  const keyPath = envFile('MCP_NODE_OPS_TLS_KEY') ?? join(certsDir(), 'server.key');
+  const caPath = envFile('MCP_NODE_OPS_TLS_CA') ?? join(certsDir(), 'ca.pem');
 
   try {
     return {
@@ -44,8 +53,11 @@ export const resolveNodeOpsTlsMaterials = (): NodeOpsTlsMaterials | null => {
     };
   } catch (error) {
     logger.warn(
-      '[node-ops] TLS materials configured but unreadable; control plane will not start.',
-      { reason: error instanceof Error ? error.message : String(error) },
+      '[node-ops] TLS materials not available; control plane will not start.',
+      {
+        reason: error instanceof Error ? error.message : String(error),
+        certPath, keyPath, caPath,
+      },
     );
     return null;
   }
