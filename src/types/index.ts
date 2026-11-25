@@ -1078,3 +1078,62 @@ export interface BatchToggleToolsResponse {
   matchedTools: string[];
   enabled: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Node-to-node operations API (`${BASE_PATH}/node-ops`, see
+// mcp-node-ops-plan.md §3.4). Payload types for
+// src/controllers/nodeOpsController.ts. Node token identities (NodeAction /
+// NodePeer) live in src/middlewares/nodeToken.ts and are re-used from there.
+// ---------------------------------------------------------------------------
+
+/** One entry of `GET /node-ops/servers`. */
+export interface NodeOpsServerSummary {
+  name: string;
+  type?: ServerConfig['type'];
+  enabled: boolean;
+  status: ServerInfo['status'];
+  owner?: string;
+  visibility?: ServerVisibility;
+  description?: string;
+  /** Only present for HTTP-type servers when the peer token has `definition` and `server.config.read` passes. */
+  endpoint?: string;
+}
+
+export interface NodeOpsListData {
+  truncated: boolean;
+  servers: NodeOpsServerSummary[];
+}
+
+export interface NodeOpsLogsData {
+  text: string;
+  truncated: boolean;
+  matched: number;
+  /** Always true: this is a subset of the output that passed through MCPHub, not a full collector. */
+  partial: boolean;
+}
+
+export interface NodeOpsDefinitionData {
+  name: string;
+  definition: Partial<ServerConfig>;
+}
+
+export interface NodeOpsToggleData {
+  name: string;
+  enabled: boolean;
+  status: ServerInfo['status'];
+}
+
+export interface NodeOpsImportRequest {
+  name: string;
+  definition: Partial<ServerConfig>;
+  enable?: boolean;
+  owner?: string;
+  visibility?: ServerVisibility;
+}
+
+export interface NodeOpsImportData {
+  name: string;
+  created: boolean;
+  enabled: boolean;
+  status: ServerInfo['status'];
+}
