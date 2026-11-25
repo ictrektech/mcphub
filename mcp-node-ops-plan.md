@@ -826,15 +826,22 @@ export function auditNodeAction(entry: {
 | `Bearer <假 token>` | 401 `Invalid bearer token` |
 | `Bearer <系统 Bearer Key>` | **200，返回合法 initialize**（负责人实测） |
 
-修法：改成 **A 持 B 的专用凭据**。
+修法：改成 **A 持 B 的专用凭据**，且**凭据在界面上填、存到盘里、立即生效，不需要重启**（把凭据放环境变量是 v1 的将就做法，已否决：改环境变量要重启进程，运维成本高且不可在界面上管理）。
 
-1. `RemoteNodeConfig`（`src/types/index.ts`）加可选字段 `dataPlaneToken?: string`——B 上签发的 Bearer Key（`POST /api/auth/keys`，`kind: "system"`，用 `accessType` / `allowedServers` 限定只共享允许的服务）。
-2. `connectRemoteServer` 生成的上游配置改为：`headers: { Authorization: "Bearer <node.dataPlaneToken>" }`，**移除 `forwardVosToken`**。
-3. `attachNodeLinkServer`（`src/controllers/remoteNodeController.ts`）：节点没有 `dataPlaneToken` 时返回 400 `data-plane-token-required`，**不要**建一条必然连不上的上游。
-4. 前端 `frontend/src/pages/RemoteNodesPage.tsx`：节点编辑里加"数据面凭据"输入框（密码框、不回显、只写不读），随节点保存；补 `locales/en.json` / `locales/zh.json`。
-5. 凭据只存在 `remoteNodes` 配置里，**不得**出现在日志、接口响应、`/api/servers` 的 config 输出中。
+1. **凭据存储**：新增 `src/services/nodeCredentialStore.ts`，读写 `/app/data/node-secrets.json`（`{ "<nodeId>": "<token>" }`，文件权限 `0600`，写临时文件 + rename 原子替换；目录不可写时报错而不是降级到内存储）。
+2. **取值顺序**（`resolveDataPlaneToken(nodeId)`）：先读 secrets 文件，再回退到部署期环境变量 `MCP_NODE_DATA_PLANE_TOKEN_<NODE_ID>`（给自动化/容器注入留口子）。**两种来源都不需要改 settings 文件**。
+3. `connectRemoteServer` 生成的上游配置：`headers: { Authorization: "Bearer <占位符>" }` 由连接时注入真实值（沿用现有 `dataPlaneTokenEnv` 机制亦可），**移除 `forwardVosToken`**。
+4. **运行期管理接口**（admin only，挂 `/api/node-links`）：
+   | 方法 | 路径 | 作用 |
+   |---|---|---|
+   | PUT | `/api/node-links/:nodeId/credential` | body `{ token }`，写入 secrets 文件；**立即生效**（下一次 attach/重连即用） |
+   | DELETE | `/api/node-links/:nodeId/credential` | 清除 |
+   | GET | `/api/node-links/:nodeId/credential` | 只返回 `{ configured: boolean, source: 'store' \| 'env' \| null }`，**绝不返回明文** |
+5. `attachNodeLinkServer`：两种来源都取不到时返回 400 `data-plane-token-required`，**不要**建一条必然连不上的上游。
+6. 前端 `frontend/src/pages/RemoteNodesPage.tsx`：节点编辑里加"数据面凭据"密码框——已配置时显示"已配置，留空不修改"，提交即调 PUT，保存后无需重启；补 `locales/en.json` / `locales/zh.json`。
+7. 凭据**不得**出现在日志、接口响应、`/api/servers` 的 config 输出、`remoteNodes` 配置里。
 
-**文件边界（本任务）**：`src/services/remoteServerRegistrationService.ts`、`src/controllers/remoteNodeController.ts`、`src/types/index.ts`、`frontend/src/pages/RemoteNodesPage.tsx`、`locales/*.json`、`tests/**`。
+**文件边界（本任务）**：`src/services/nodeCredentialStore.ts`（新增）、`src/services/remoteServerRegistrationService.ts`、`src/controllers/remoteNodeController.ts`、`src/routes/index.ts`（仅追加三条 credential 路由）、`src/types/index.ts`、`frontend/src/pages/RemoteNodesPage.tsx`、`locales/*.json`、`tests/**`。
 
 **验收（逐条实测，不许只跑单测）**
 
@@ -843,8 +850,10 @@ export function auditNodeAction(entry: {
 3. A 实际调用一次 `hello` → 返回 `hi from B`；
 4. A 点断开 → `disconnected`，工具消失；
 5. B 上 `demo` 进程仍在（只摘聚合，不停服务）；
-6. 节点未配 `dataPlaneToken` 时 attach → 400 `data-plane-token-required`，不产生垃圾上游；
-7. 凭据不出现在 A 的日志、响应体和 `/api/servers` 输出里。
+6. 节点未配凭据时 attach → 400 `data-plane-token-required`，不产生垃圾上游；
+7. 凭据不出现在 A 的日志、响应体和 `/api/servers` 输出里；
+8. **无需重启**：在界面上填入凭据后直接点"接入"即成功（同一进程内，不重启、不改 settings、不改环境变量）；`GET credential` 只回 `configured: true`。
+9. secrets 文件权限为 `0600`，内容是 `{ "<nodeId>": "<token>" }`。
 
 **禁止**：重新引入 `forwardVosToken`；改 `/node-ops` 契约；把凭据落进 `mcpServers`（那是上游配置，不是凭据库）。
 
