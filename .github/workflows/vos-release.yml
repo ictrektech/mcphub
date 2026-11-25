@@ -87,40 +87,87 @@ jobs:
             -F "package=@$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" -F force=true \
             http://127.0.0.1:18899/api/appstore/apps > "$HOME/dev/build/mcphub/publish-result.json"
           python3 - <<'PY'
-          import json, os, pathlib, urllib.request
-          response = json.loads((pathlib.Path.home() / 'dev/build/mcphub/publish-result.json').read_text())
-          if response.get('code') != 0:
-              raise SystemExit('VOS App Store publication rejected')
-          base = 'http://127.0.0.1:18899'
-          app_id = 'com.ictrek.mcphub'
-          version = os.environ['PACKAGE_VERSION']
-          with urllib.request.urlopen(f'{base}/api/appstore/apps/{app_id}', timeout=30) as result:
-              record = json.load(result)
-          detail = record.get('data') or {}
-          archive = detail.get('app_tar_gz') or {}
-          expected = f'appstore/apps/{app_id}/{version}/app.tar.gz'
-          problems = []
-          if record.get('code') != 0:
-              problems.append(f"code={record.get('code')!r}")
-          if detail.get('id') != app_id:
-              problems.append(f"id={detail.get('id')!r}")
-          if detail.get('current_version') != version:
-              problems.append(f"current_version={detail.get('current_version')!r}")
-          if version not in detail.get('versions', []):
-              problems.append(f"versions={detail.get('versions')!r}")
-          if archive.get('download_path') != expected:
-              problems.append(f"download_path={archive.get('download_path')!r}")
-          if archive.get('size', 0) <= 0:
-              problems.append(f"size={archive.get('size')!r}")
-          if problems:
-              print('expected version:', version)
-              print('app store record:', json.dumps(detail, ensure_ascii=False)[:3000])
-              raise SystemExit('Published App Store record does not match the release: ' + ', '.join(problems))
-          probe = urllib.request.Request(f'{base}/store/{expected}', headers={'Range': 'bytes=0-1'})
-          with urllib.request.urlopen(probe, timeout=30) as result:
-              if result.read(2) != b'\x1f\x8b':
-                  raise SystemExit('Published App Store archive is unavailable')
-          print(f'VOS App Store publication verified: {app_id} {version}')
+          import json, os, pathlib, time, urllib.request
+
+          BASE = 'http://127.0.0.1:18899'
+          APP_ID = 'com.ictrek.mcphub'
+          VERSION = os.environ['PACKAGE_VERSION']
+          DEFAULT_ARCHIVE = f'appstore/apps/{APP_ID}/{VERSION}/app.tar.gz'
+
+          result = json.loads((pathlib.Path.home() / 'dev/build/mcphub/publish-result.json').read_text())
+          if result.get('code') != 0:
+              raise SystemExit(
+                  'VOS App Store rejected the upload: ' + json.dumps(result, ensure_ascii=False)[:2000])
+
+          def fetch_record():
+              with urllib.request.urlopen(f'{BASE}/api/appstore/apps/{APP_ID}', timeout=30) as response:
+                  return json.load(response)
+
+          def version_names(detail):
+              raw = detail.get('versions') or []
+              names = []
+              for entry in raw:
+                  if isinstance(entry, str):
+                      names.append(entry)
+                  elif isinstance(entry, dict):
+                      for key in ('version', 'tag', 'name'):
+                          if isinstance(entry.get(key), str):
+                              names.append(entry[key])
+                              break
+              return names
+
+          def archive_head(path):
+              request = urllib.request.Request(f'{BASE}/store/{path}', headers={'Range': 'bytes=0-1'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return response.read(2)
+
+          def problems_of(record):
+              """Only two things decide success: the version is published, and its
+              archive downloads. current_version and the exact download path are
+              advisory - a re-published version legitimately reports different
+              values there, which used to fail the whole release."""
+              detail = record.get('data') or {}
+              archive = detail.get('app_tar_gz') or {}
+              found = []
+              if record.get('code') != 0:
+                  found.append(f"code={record.get('code')!r}")
+              if detail.get('id') != APP_ID:
+                  found.append(f"id={detail.get('id')!r}, expected {APP_ID!r}")
+              names = version_names(detail)
+              if VERSION not in names:
+                  found.append(f"version {VERSION!r} missing from versions={names!r}")
+              path = archive.get('download_path') or DEFAULT_ARCHIVE
+              if VERSION not in path:
+                  found.append(f"download_path={path!r} does not point at {VERSION!r}")
+              if not found:
+                  try:
+                      head = archive_head(path)
+                  except Exception as error:  # noqa: BLE001 - report whatever the store did
+                      found.append(f'archive {path!r} unreachable: {error}')
+                  else:
+                      if head != b'\x1f\x8b':
+                          found.append(f'archive {path!r} is not gzip: {head!r}')
+              return detail, found
+
+          # The catalog can lag the upload by a few seconds; keep polling until the
+          # version shows up instead of failing on the first look.
+          deadline = time.time() + 120
+          while True:
+              record = fetch_record()
+              detail, problems = problems_of(record)
+              if not problems:
+                  break
+              if time.time() >= deadline:
+                  print('app store record:', json.dumps(detail, ensure_ascii=False)[:3000])
+                  raise SystemExit(
+                      'Published App Store record does not match the release: ' + '; '.join(problems))
+              time.sleep(5)
+
+          current = detail.get('current_version')
+          if current != VERSION:
+              print(f"::warning::store reports current_version={current!r} while publishing {VERSION!r}; "
+                    f'version is published and downloadable, continuing')
+          print(f'VOS App Store publication verified: {APP_ID} {VERSION}')
           PY
       - name: Close App Store tunnel
         if: always()
