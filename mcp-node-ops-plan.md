@@ -172,6 +172,7 @@ MCP_NODE_TOKENS='[
 | `control` | enable / disable 服务 |
 | `import` | 导入非 stdio 定义 |
 | `import-stdio` | 导入 stdio 定义（等于允许在目标节点跑命令，必须单独授权） |
+| `package` | 上传服务包（.mcpb）到对端 `/app/data/uploads/mcpb/`（§A-3；等于允许在对端落可执行代码，必须单独授权） |
 
 `GET /health` 只要 token 有效即可，不占 action。
 
@@ -311,6 +312,9 @@ peer 身份：`principal = { username: peer.name, userGroups: [], isAdmin: peer.
 | 403 | `readonly` | `READONLY=true` 时执行写动作 |
 | 404 | `server-not-found` | 服务不存在 |
 | 409 | `server-duplicate` | 导入重名 |
+| 409 | `package-exists` | 上传的包名已被别的 peer 占用（§A-3，不允许覆盖他人代码） |
+| 400 | `package-too-large` / `invalid-package` | 超过大小上限 / `manifest.name` 与 URL 不一致 |
+| 403 | `package-forbidden` | 无 `package` 动作 |
 | 429 | `rate-limited` | 超限 |
 
 ### 3.6 审计
@@ -639,11 +643,66 @@ curl -s -H "Authorization: Bearer $TOK" "$BASE/node-ops/servers/amap/definition"
 
 **不做**：自研加密、应用层 HMAC 签名、token 加密传输（TLS 已覆盖）；不做 mTLS 的自动降级。
 
-**后续（不在本轮）**：`PUT /node-ops/packages/...`（复用 `/api/mcpb/upload` 的 handler，动作 `package`）必须挂在这同一个 TLS 监听器上，不允许给 `/api` 开机器凭据口子。
+---
+
+#### A-3 服务包上传（**暂缓，不做**：用户自行用界面 MCPB 上传，见 §1.3 决策）
+
+> 负责人已确认：包的分发由用户自己通过 MCPHub 的 MCPB 上传完成，跨节点自动打包/推送不在本轮范围。以下保留为设计存档，不派工。
+
+**问题**：A-2 只让"定义"能搬。谁自己写了一个 MCP 服务（代码在自己机器上），定义搬过去也起不来 —— 目标节点没有那份代码。用 `docker cp` 补是运维补丁，不是产品能力。
+
+**目标**：A 能把服务包（.mcpb）推给 B，B 解压落盘后由 MCPHub 自己拉起进程。全程两条 curl，不碰 docker、不碰 SSH、不碰 VOS 发布流程。
+
+**契约（冻结）**
+
+```
+PUT  <BASE_PATH>/node-ops/packages/:name/:version     动作 package
+     Content-Type: multipart/form-data
+     field: mcpbFile=<.mcpb 文件>（就是 zip，根目录有 manifest.json）
+```
+
+| 项 | 要求 |
+|---|---|
+| 落盘位置 | 复用现有 MCPB 逻辑：`/app/data/uploads/mcpb/server-<name>/`，容器重建后仍在 |
+| 实现 | **复用** `src/controllers/mcpbController.ts` 的 `uploadMiddleware` 与 `uploadMcpbFile`，不新写解压/校验 |
+| 身份 | peer → 合成管理员身份后再调 handler（handler 内部会 `requireAdmin`，用适配中间件把 `MCP_NODE_TOKENS` 的 peer 映射成 `{username: peer.name, isAdmin: true}`） |
+| 覆盖保护 | 若 `server-<name>` 或同名服务已存在：**B 上该服务 owner 不是这个 peer 时返回 409 `package-exists`**，不得覆盖别人的代码（现有 handler 会直接删旧目录重建，必须在 multer 落盘前拦住） |
+| 大小上限 | multer `limits.fileSize`，默认 64 MB，可由 `MCP_NODE_PACKAGE_MAX_BYTES` 覆盖 |
+| 校验 | `manifest.json` 的 `name` 必须与 URL 的 `:name` 一致（防路径错位）；`version` 必须与 `:version` 一致 |
+| 审计 | 每次上传一条：`peer / action=package / package=<name>@<version> / sha256 / overwritten / ok` |
+| 挂载点 | **必须在 A-2 的 mTLS 监听器上**，不允许给 `/api` 开机器凭据口子 |
+
+**调用方两步（这就是"传过去并启动"的完整动作）**
+
+```bash
+# ① 推代码
+curl -X PUT --cert client.crt --key client.key --cacert ca.pem \
+  -F "mcpbFile=@my-mcp.mcpb" \
+  "https://B:31890/<BASE_PATH>/node-ops/packages/my-mcp/1.0.0"
+
+# ② 注册并启动（definition 直接指解压后的真实路径，不需要新语法）
+curl -X POST --cert client.crt --key client.key --cacert ca.pem \
+  -H 'content-type: application/json' \
+  -d '{"name":"my-mcp","definition":{"type":"stdio","command":"node",
+        "args":["/app/data/uploads/mcpb/server-my-mcp/main.js"]},"enable":true}' \
+  "https://B:31890/<BASE_PATH>/node-ops/servers"
+```
+
+第二步 `enable: true`（默认）会让 MCPHub 立刻 fork 进程并刷新工具列表——**这就是"自动启动"**。
+
+**DoD**
+
+- 上传 → 注册 → `GET /node-ops/servers` 看到 `enabled:true`、`status` 从 `connecting` 走向 `connected`（命令不存在时应如实停在失败态并可从 `logs` 看到原因）。
+- 覆盖保护：用 peer B 的 token 去覆盖 peer A 已注册的同名包 → 409 `package-exists`，且**磁盘上的旧代码未被删除**。
+- 大小超限 → 400 `package-too-large`；`manifest.name` 与 URL 不一致 → 400 `invalid-package`。
+- 审计包含 sha256；token 与包内容不入日志。
+- 测试：①正常上传 + 注册 + connected；②越权覆盖 409；③超大 400；④名称不一致 400；⑤未知 peer 403；⑥明文端口 403 `tls-required`。
+
+**边界**：只搬"能作为 stdio 子进程跑起来的东西"。需要独立容器、GPU、对外端口的服务仍走 VOS 应用部署，本任务不涉及。
 
 ### Agent B —— 鉴权、限流、审计
 
-**只准改**：新增 `src/middlewares/nodeToken.ts`、`src/utils/nodeAudit.ts`。
+**只准改**（B-1 鉴权）：新增 `src/middlewares/nodeToken.ts`、`src/utils/nodeAudit.ts`。**B-2 的文件清单见下方该节，以那节为准。**
 
 > **A-2 期间的文件移交**：`src/middlewares/nodeToken.ts` 转由 Agent A 维护（mTLS 的 CN 识别、明文拦截都在这个文件里）。B 不再改动它；若 B 需要调整审计字段，只改 `src/utils/nodeAudit.ts`，不得与 A 同时改 `nodeToken.ts`。
 
@@ -665,6 +724,67 @@ export function auditNodeAction(entry: {
 **DoD**：`MCP_NODE_TOKENS` 未配置 / JSON 非法 / token 不匹配 → 401 且 `code` 正确，绝不静默放行；action 不足 → 403；`READONLY=true` 时写动作 403；token 明文不入日志/响应；内存只留 sha256。
 
 **禁止**：改 `auth.ts`、`middlewares/index.ts`、`betterAuthConfig.ts`、既有路由。
+
+---
+
+#### B-2 跨节点服务接入（本轮核心，负责人已确认范围）
+
+**这是"能调用"落地的唯一路径，也是用户最关心的那一条。**
+
+**为什么需要它**：`/node-ops` 的 `enable` / `disable` 只改变 **B 自己**的聚合——B 上服务开着，A 的 Agent 依然调不到。要能调用，必须在 **A 侧**把 B 的服务接成 A 自己的上游：`A 的 Agent → A 的 MCPHub → B 的 /mcp/<server> → B 上的进程`。
+
+**只准改**
+
+- `src/services/remoteServerRegistrationService.ts`（接入时置 `forwardVosToken`）
+- `src/controllers/remoteNodeController.ts`（新增三个接入端点）
+- `src/routes/index.ts`（仅追加这三条路由）
+- `src/types/index.ts`（仅追加类型）
+- `frontend/src/pages/RemoteNodesPage.tsx` + `locales/en.json` + `locales/zh.json`（按钮与文案）
+- `src/controllers/nodeOpsController.ts`：**只允许**在 `GET /node-ops/servers` 的响应里加一个 `mcpPath` 字段（A 已交付，此字段由 B 加，其余不动）
+
+**契约（冻结）**
+
+1. B 侧 `GET /node-ops/servers` 每条增加：
+
+   ```json
+   { "name": "playwright", "mcpPath": "/app/com.ictrek.mcphub/mcp/playwright", ... }
+   ```
+
+   `mcpPath` = `<config.basePath>/mcp/<encodeURIComponent(name)>`（同 `vosDiscovery` 的写法），是**相对路径**，由调用方拼 host。
+
+2. A 侧三个端点（挂 `/api`，admin only，沿用 `requireAdminMiddleware`）：
+
+   | 方法 | 路径 | 作用 |
+   |---|---|---|
+   | GET | `/api/node-links/:nodeId/servers` | 代理 B 的 `/node-ops/servers`，返回 `[{ name, type, status, mcpPath, attached }]`；`attached` 来自 binding 表 |
+   | POST | `/api/node-links/:nodeId/servers/:name/attach` | 取 B 的 `mcpPath` 拼出 url → 建/更新 binding（`transport: 'streamable-http'`）→ `connectRemoteServer` |
+   | POST | `/api/node-links/:nodeId/servers/:name/detach` | `disconnectRemoteServer`（保留 binding，可再次接入） |
+
+3. `connectRemoteServer` 生成的 upstream 配置必须带 **`forwardVosToken: true`**：调用链上转发的是**调用者本人**的 VOS token，B 按该用户校验可见性，不能用服务账号冒充（`src/types/index.ts:555`、`builtinServerProvisioning.ts:97` 是现成用法）。
+
+4. A 调 B 的 `/node-ops/servers` 走 mTLS：A 需要该节点的 client cert + token（A-2 已具备）。
+
+5. **已知约束（必须二选一并写进实现说明）**：数据面 `/mcp/<name>` 目前只在 31889（明文 HTTP），而转发的是用户 VOS token。
+   - **方案甲（推荐）**：把 `/mcp/*` 也放行到 A-2 的 mTLS 监听器上（改一处路径白名单，负责人已批准这一处改动）；
+   - 方案乙：明确接受内网明文，并在文档里写清楚风险。
+
+**前端（RemoteNodesPage）**
+
+- 选中节点后展示"对端服务"列表：服务名、类型、状态、是否已接入；
+- 每行一个按钮：未接入 → "接入"；已接入 → "断开"；
+- B 不可达 / 未配置证书 / 未授权时显示明确原因，**不允许空列表假装"没有服务"**；
+- 中英文案同时补 `locales/*.json`。
+
+**DoD**
+
+- 在 A 上对 B 的 `playwright`（stdio）点"接入"后，A 的 Agent 能 `tools/list` 看到并成功调用其工具；点"断开"后立即消失。
+- 私有服务：无权限的用户从 A 调用应被 B 拒绝（证明 `forwardVosToken` 生效，且没被 A 的机器身份提权）。
+- B 不可达 → 接口返回明确 error，界面显示原因。
+- 非 admin 调这三个端点 → 403。
+- 用户 VOS token 不出现在 A 的日志、响应体、binding 表里。
+- `pnpm backend:build`、`pnpm test -- tests/node-ops`、前端 `tsc -b` 通过。
+
+**禁止**：改 `/node-ops` 既有七个接口的语义（只加 `mcpPath` 一个字段）；新造状态机（接入/断开一律走既有 `connectRemoteServer` / `disconnectRemoteServer`）；引入新依赖；把用户 token 落盘。
 
 ### Agent C —— 测试、验证与文档
 
