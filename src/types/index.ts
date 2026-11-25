@@ -475,6 +475,7 @@ export interface RemoteServerBinding {
   serverName: string; // Name registered by admin; upstream is <serverName>@<node>
   schedulerNodeId: string;
   address: string; // Full MCP URL including path, e.g. http://10.0.0.1:8080/mcp
+  transport?: 'streamable-http'; // Upstream transport used when attached from a peer node's MCP path
   profile?: string; // Node profile at registration time (read-only echo)
   upstreamName?: string; // Fixed once connected so renames do not break routing
   reachable?: boolean;
@@ -553,6 +554,12 @@ export interface ServerConfig {
   headers?: Record<string, string>; // HTTP headers for SSE/streamable-http/openapi servers
   passthroughHeaders?: string[]; // Header names to pass through from MCP requests to upstream SSE/streamable-http servers
   forwardVosToken?: boolean; // VOS adaptation: authenticate this upstream with the caller's own VOS token instead of a stored credential
+  // Machine credential reference for peer data-plane upstreams. Only the
+  // placeholder name and node id are persisted; the real token is resolved at
+  // transport build time from the runtime credential store and never written
+  // back into the presented server config.
+  dataPlaneTokenEnv?: string;
+  dataPlaneNodeId?: string;
   enabled?: boolean; // Flag to enable/disable the server
   owner?: string; // Owner of the server, defaults to 'admin' user
   // Per-server visibility for non-admin users.
@@ -1097,6 +1104,17 @@ export interface NodeOpsServerSummary {
   description?: string;
   /** Only present for HTTP-type servers when the peer token has `definition` and `server.config.read` passes. */
   endpoint?: string;
+  /** Relative `<basePath>/mcp/<name>` path used by a peer to attach this server as an upstream. */
+  mcpPath?: string;
+}
+
+/** One entry of `GET /api/node-links/:nodeId/servers` (peer view from the hub). */
+export interface NodeLinkServerView {
+  name: string;
+  type?: ServerConfig['type'];
+  status: ServerInfo['status'];
+  mcpPath?: string;
+  attached: boolean;
 }
 
 export interface NodeOpsListData {

@@ -98,6 +98,9 @@ describe('remote node MCP service registration (P1)', () => {
       mcpServers: {},
       remoteNodes: [{ id: 'node-1', name: '192 orin nx', profile: 'jetson-orin' }],
     };
+    // Attaching a peer needs a data-plane credential; these cases exercise the
+    // transport wiring, so provide one through the deployment-time env source.
+    process.env.MCP_NODE_DATA_PLANE_TOKEN_NODE_1 = 'test-data-plane-token';
     mockServers.length = 0;
     mockGroups.length = 0;
     mockReachable.mockReset();
@@ -201,4 +204,8 @@ describe('remote node MCP service registration (P1)', () => {
     expect(checked.reachable).toBe(false);
     expect(checked.lastError).toMatch(/unreachable/);
   });
+});
+
+afterAll(() => {
+  delete process.env.MCP_NODE_DATA_PLANE_TOKEN_NODE_1;
 });

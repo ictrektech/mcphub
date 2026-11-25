@@ -1,4 +1,8 @@
 import { getGroupDao, getServerDao } from '../dao/index.js';
+import {
+  dataPlaneEnvNameOf,
+  resolveDataPlaneToken,
+} from './nodeCredentialStore.js';
 import { RemoteNodeError, getRemoteNodeInternal } from './remoteNodeService.js';
 import {
   checkRemoteServerAddress,
@@ -23,6 +27,8 @@ export const remoteServerLocalName = (serverName: string, nodeName: string): str
   `${serverName}@${slug(nodeName)}`;
 
 export const remoteGroupName = (nodeName: string): string => `远程节点 · ${nodeName}`;
+
+export { dataPlaneEnvNameOf };
 
 const upstreamNameOf = (binding: RemoteServerBinding, node: RemoteNodeConfig): string =>
   binding.upstreamName ?? remoteServerLocalName(binding.serverName, node.name);
@@ -55,6 +61,14 @@ export const connectRemoteServer = async (
 ): Promise<RegistrationResult> => {
   const node = getRemoteNodeInternal(schedulerNodeId);
   const binding = getRemoteServerBinding(schedulerNodeId, serverName);
+  const dataPlaneTokenEnv = dataPlaneEnvNameOf(node.id);
+  const credential = await resolveDataPlaneToken(node.id);
+  if (!credential) {
+    throw new RemoteNodeError(
+      `Node '${node.name}' has no data-plane credential; configure it in the node settings`,
+      400,
+    );
+  }
   const checked = await checkRemoteServerAddress(binding);
   if (checked.reachable === false) {
     throw new RemoteNodeError(`MCP server address is unreachable: ${binding.address}`, 502);
@@ -72,6 +86,12 @@ export const connectRemoteServer = async (
     nodeId: node.id,
     nodeName: node.name,
     nodeProfile: node.profile,
+    // The data plane has no user request context during MCP handshake. Keep
+    // only the env reference here: the transport resolves it at connect time,
+    // while configs exposed by the API retain the harmless placeholder.
+    dataPlaneTokenEnv,
+    dataPlaneNodeId: node.id,
+    headers: { Authorization: `Bearer \${${dataPlaneTokenEnv}}` },
     description: `远程节点 ${node.name}${node.profile ? ` (${node.profile})` : ''} 的 ${binding.serverName}`,
   };
   let created = false;
@@ -82,6 +102,10 @@ export const connectRemoteServer = async (
   } else {
     const added = await mcp.addServer(upstreamName, config);
     if (!added.success) throw new RemoteNodeError(added.message || 'Failed to register upstream', 500);
+    // addServer only persists the definition; without a toggle the new upstream
+    // stays disconnected forever (the update branch already did this).
+    const toggled = await mcp.toggleServerStatus(upstreamName, true);
+    if (!toggled.success) throw new RemoteNodeError(toggled.message || 'Failed to enable upstream', 500);
     created = true;
   }
   if (!binding.upstreamName) updateRemoteServerBinding(binding.id, { upstreamName });

@@ -163,6 +163,8 @@ export const nodeOpsListServers = async (req: Request, res: Response): Promise<v
       owner: record.owner,
       visibility: record.visibility,
       description: record.description,
+      // Relative path: the caller supplies the host. Mirrors vosDiscovery.
+      mcpPath: `${config.basePath}/mcp/${encodeURIComponent(record.name)}`,
     };
     // The upstream URL only leaves the node when the peer may read full configs.
     if (
