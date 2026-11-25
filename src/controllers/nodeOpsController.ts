@@ -13,15 +13,6 @@ import config from '../config/index.js';
 import { getServerDao } from '../dao/DaoFactory.js';
 import type { ServerConfigWithName } from '../dao/ServerDao.js';
 import { nodePeerOf, peerPrincipal } from '../middlewares/nodeToken.js';
-import {
-  addServer,
-  broadcastPromptListChanged,
-  broadcastResourceListChanged,
-  broadcastToolListChanged,
-  getServersInfo,
-  notifyToolChanged,
-  toggleServerStatus,
-} from '../services/mcpService.js';
 import { DataService } from '../services/dataService.js';
 import { authorizationService } from '../services/authorizationService.js';
 import { presentServerForPrincipal } from '../services/serverConfigPresenter.js';
@@ -42,6 +33,14 @@ import type { IUser, ServerVisibility } from '../types/index.js';
 
 // Same pattern as remoteServerBindingService.NAME_PATTERN (§3.4 import rules).
 const NAME_PATTERN = /^[\w.$~%-]{1,128}$/;
+
+// mcpService pulls in the OAuth/SDK modules (openid-client is ESM-only, which
+// Jest cannot parse when the route table is imported without mocks). Load it on
+// first use instead, the same way remoteServerRegistrationService does.
+type McpServiceModule = typeof import('../services/mcpService.js');
+let mcpServiceModule: Promise<McpServiceModule> | undefined;
+const loadMcpService = (): Promise<McpServiceModule> =>
+  (mcpServiceModule ??= import('../services/mcpService.js'));
 
 // Portable definition whitelist (§3.4 export). Everything else is stripped so
 // oauth tokens, credential templates, proxy config and ownership metadata never
@@ -110,11 +109,13 @@ const statusOf = async (
   name: string,
   fallback: NonNullable<NodeOpsServerSummary['status']>,
 ): Promise<NonNullable<NodeOpsServerSummary['status']>> => {
+  const { getServersInfo } = await loadMcpService();
   const infos = await getServersInfo();
   return infos.find((info) => info.name === name)?.status ?? fallback;
 };
 
 const statusMap = async (): Promise<Map<string, NonNullable<NodeOpsServerSummary['status']>>> => {
+  const { getServersInfo } = await loadMcpService();
   const infos = await getServersInfo();
   return new Map(infos.map((info) => [info.name, info.status]));
 };
@@ -291,7 +292,8 @@ const toggleConnection = async (
     return;
   }
 
-  const result = await toggleServerStatus(name, enabled);
+  const mcp = await loadMcpService();
+  const result = await mcp.toggleServerStatus(name, enabled);
   if (!result.success) {
     // Contract error table has no toggle-specific code; fold into invalid-body
     // with the original message preserved.
@@ -304,9 +306,9 @@ const toggleConnection = async (
   // (same trio as serverController.toggleServer); enabling broadcasts through
   // initializeClientsFromSettings internally.
   if (!enabled) {
-    broadcastToolListChanged();
-    broadcastPromptListChanged();
-    broadcastResourceListChanged();
+    mcp.broadcastToolListChanged();
+    mcp.broadcastPromptListChanged();
+    mcp.broadcastResourceListChanged();
   }
 
   // oauth_required is a business state: 200 here, the caller decides next steps.
@@ -413,16 +415,17 @@ export const nodeOpsImportServer = async (req: Request, res: Response): Promise<
     peer.scope === 'admin' && typeof body?.owner === 'string' ? body.owner : peer.name;
   configToPersist.visibility = visibility;
 
-  const result = await addServer(name, configToPersist);
+  const mcp = await loadMcpService();
+  const result = await mcp.addServer(name, configToPersist);
   if (!result.success) {
     failAudited(400, 'invalid-definition', result.message || 'Failed to add server');
     return;
   }
 
   if (configToPersist.enabled) {
-    await toggleServerStatus(name, true);
+    await mcp.toggleServerStatus(name, true);
   }
-  notifyToolChanged(name, { reportEmbeddingProgress: true }).catch((error) => {
+  mcp.notifyToolChanged(name, { reportEmbeddingProgress: true }).catch((error) => {
     logger.error('[node-ops] failed to refresh tools for imported server:', error);
   });
 
