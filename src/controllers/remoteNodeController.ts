@@ -775,6 +775,30 @@ export const deployNodeServer = async (req: Request, res: Response): Promise<voi
       .slice(0, 64);
 
     await ensureDeploymentAccess(userToken, appId, target, repository);
+
+    // The upstream IS the node we just deployed to: make sure the global SSRF
+    // allowlist includes the node's address, otherwise transports are blocked
+    // with UnsafeUrlError ("Blocked target IP") and the server stays in
+    // 'connecting' forever.
+    if (node.address?.trim()) {
+      const { getSystemConfigDao } = await import('../dao/DaoFactory.js');
+      const { setCachedSystemConfig } = await import('../utils/systemConfigCache.js');
+      const systemConfigDao = getSystemConfigDao();
+      const systemConfig = await systemConfigDao.get();
+      const network = systemConfig.network ?? {};
+      const nodeCidr = `${node.address.trim()}/32`;
+      const allowedCidrs = new Set(network.allowedCidrs ?? []);
+      if (!allowedCidrs.has(nodeCidr)) {
+        allowedCidrs.add(nodeCidr);
+        const updated = { ...systemConfig, network: { ...network, allowedCidrs: [...allowedCidrs] } };
+        await systemConfigDao.update(updated);
+        setCachedSystemConfig(updated);
+        logger.info('[deploy] node address added to network.allowedCidrs', {
+          node: node.name,
+          cidr: nodeCidr,
+        });
+      }
+    }
     const deployment = await deployToScheduler(userToken, {
       appId,
       requestKey,
@@ -797,11 +821,6 @@ export const deployNodeServer = async (req: Request, res: Response): Promise<voi
       nodeName: node.name,
       nodeProfile: node.profile,
       deploymentId: deployment.id,
-      // The upstream IS the node we just deployed to: allow the SSRF guard to
-      // reach it by adding the node's address to the server's CIDR allowlist.
-      network: {
-        allowedCidrs: [ ...(node.address?.trim() ? [`${node.address.trim()}/32`] : []) ],
-      },
       ...(visibility ? { visibility } : {}),
     });
 
