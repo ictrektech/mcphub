@@ -205,7 +205,11 @@ import {
   attachNodeLinkServer,
   detachNodeLinkServer,
   deleteNodeCredential,
+  deployNodeServer,
   discoverFromScheduler,
+  startDeployedServer,
+  stopDeployedServer,
+  undeployNodeServer,
   newNodePairingCode,
   pairRemoteNode,
   pairWithNode,
@@ -330,6 +334,26 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.get('/remote-nodes/:id/servers', requireAdminMiddleware, getRemoteServers);
   // §9 自动配对: one-click pairing (mint code on the peer + exchange + persist).
   authenticatedRouter.post('/remote-nodes/:id/pair', requireAdminMiddleware, pairRemoteNode);
+  // §P2 部署: launch an MCP server container on the node via V-Scheduler and
+  // register the running endpoint as a managed streamable-http upstream.
+  authenticatedRouter.post('/remote-nodes/:id/deploy', requireAdminMiddleware, deployNodeServer);
+  // §P2 生命周期: pause/resume the deployed container (and toggle the local
+  // upstream accordingly), or remove the deployment entirely.
+  authenticatedRouter.post(
+    '/remote-nodes/:id/servers/:name/stop',
+    requireAdminMiddleware,
+    stopDeployedServer,
+  );
+  authenticatedRouter.post(
+    '/remote-nodes/:id/servers/:name/start',
+    requireAdminMiddleware,
+    startDeployedServer,
+  );
+  authenticatedRouter.post(
+    '/remote-nodes/:id/servers/:name/undeploy',
+    requireAdminMiddleware,
+    undeployNodeServer,
+  );
   // B side of pairing: admin mints the one-time code a peer may redeem once.
   authenticatedRouter.post('/node-ops-pairing-code', requireAdminMiddleware, newNodePairingCode);
   authenticatedRouter.post(

@@ -547,6 +547,9 @@ export interface ServerConfig {
   nodeId?: string;
   nodeName?: string;
   nodeProfile?: string;
+  /** V-Scheduler backend deployment id (image-studio pattern): lets start/stop
+   * lifecycle actions reach the container running on the compute node. */
+  deploymentId?: string;
   url?: string; // URL for SSE or streamable HTTP servers
   command?: string; // Command to execute for stdio-based servers
   args?: string[]; // Arguments for the command

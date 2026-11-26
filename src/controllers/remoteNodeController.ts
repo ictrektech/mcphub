@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
-import forge from 'node-forge';
+import { generateKeyPairSync } from 'node:crypto';
 import https from 'node:https';
 import http from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import config from '../config/index.js';
-import type { NodeLinkServerView, NodeOpsServerSummary, RemoteNodeConfig } from '../types/index.js';
+import type { NodeLinkServerView, NodeOpsServerSummary, RemoteNodeConfig, ServerVisibility } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import {
   RemoteNodeError,
@@ -39,6 +39,13 @@ import {
   setCredential,
 } from '../services/nodeCredentialStore.js';
 import { certsDir, createPairingCode, pairPeer } from '../services/nodePairingService.js';
+import {
+  deployToScheduler,
+  ensureDeploymentAccess,
+  imageRepositoryOf,
+  removeDeployment,
+  setDeploymentState,
+} from '../services/schedulerDeploymentService.js';
 
 /** VOS dashboard requests carry the user token in x-vos-token; accept Bearer too. */
 const vosTokenFromRequest = (req: Request): string => {
@@ -662,8 +669,15 @@ export const pairRemoteNode = async (req: Request, res: Response): Promise<void>
     }
 
     // 2) Generate a fresh client key locally; only the public half travels.
-    const clientKeys = forge.pki.rsa.generateKeyPair(2048);
-    const publicKeyPem = forge.pki.publicKeyToPem(clientKeys.publicKey);
+    //    Native crypto: forge's pure-JS RSA keygen blocks the event loop for
+    //    seconds (same bug class as the bootstrap keygen fixed in §9).
+    const clientKeys = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    const publicKeyPem = String(clientKeys.publicKey);
+    const privateKeyPem = String(clientKeys.privateKey);
 
     // 3) Exchange the code for a client certificate + control-plane token.
     const issuance = await pairRequest<{ ca: string; cert: string; token: string }>(
@@ -677,7 +691,7 @@ export const pairRemoteNode = async (req: Request, res: Response): Promise<void>
     // 4) Persist per-peer bundle and control token; effective immediately.
     const peerDir = peerBundleDirOf(node);
     await mkdir(peerDir, { recursive: true, mode: 0o700 });
-    await writeFile(join(peerDir, 'client.key'), forge.pki.privateKeyToPem(clientKeys.privateKey), { mode: 0o600 });
+    await writeFile(join(peerDir, 'client.key'), privateKeyPem, { mode: 0o600 });
     await writeFile(join(peerDir, 'client.crt'), issuance.cert, { mode: 0o644 });
     await writeFile(join(peerDir, 'ca.pem'), issuance.ca, { mode: 0o644 });
     await setCredential(`${node.id}-control`, issuance.token);
@@ -687,5 +701,166 @@ export const pairRemoteNode = async (req: Request, res: Response): Promise<void>
     res.json({ success: true, data: { paired: true, nodeId: node.id } });
   } catch (error) {
     failWith(res, error);
+  }
+};
+
+/** §P2 Deploy an MCP server container onto a whitelisted compute node via the
+ * V-Scheduler deployment API (image-studio pattern), then register the running
+ * endpoint as a streamable-http upstream. The node carries no MCPHub instance;
+ * auth is the deploy-time channel credential. Admin only.
+ *
+ * Body: { name, image, containerPort?, mcpPath?, visibility? }
+ * The deployment is idempotent per (node, name): re-invoking with the same
+ * payload returns the existing deployment instead of redeploying. */
+export const deployNodeServer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const node = getRemoteNodeInternal(req.params.id);
+    const userToken = vosTokenFromRequest(req);
+    if (!userToken) throw new RemoteNodeError('VOS user token is required', 401);
+    if (!node.schedulerNodeId?.trim()) {
+      throw new RemoteNodeError(
+        `Node '${node.name}' has no scheduler id: import it from V-Scheduler discovery first`,
+        400,
+      );
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const name = String(body.name ?? '').trim();
+    if (!/^[A-Za-z0-9._:-]{1,64}$/.test(name)) {
+      throw new RemoteNodeError('name must match ^[A-Za-z0-9._:-]{1,64}$', 400);
+    }
+    const image = String(body.image ?? '').trim();
+    if (!image) throw new RemoteNodeError('image is required', 400);
+    const containerPort = Number(body.containerPort ?? 3000);
+    if (!Number.isInteger(containerPort) || containerPort <= 0 || containerPort > 65535) {
+      throw new RemoteNodeError('containerPort must be an integer in 1-65535', 400);
+    }
+    const mcpPath = (String(body.mcpPath ?? '/mcp').trim() || '/mcp').replace(/\/+$/, '') || '/mcp';
+    const visibility: ServerVisibility | undefined =
+      body.visibility === 'public' || body.visibility === 'group'
+        ? (body.visibility as ServerVisibility)
+        : undefined;
+
+    // Profile correspondence: deploy onto the node, so the service runs on the
+    // node's own profile compute. The target profile comes from the whitelist.
+    const profile = node.profile?.trim()
+      || node.detectedProfile?.trim()
+      || node.arch?.trim()
+      || 'node';
+    const target = { kind: 'ssh' as const, id: node.schedulerNodeId, profile };
+    const appId = 'com.ictrek.mcphub';
+    const repository = imageRepositoryOf(image);
+    const requestKey = `mcphub-${node.id}-${name}`.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64);
+
+    await ensureDeploymentAccess(userToken, appId, target, repository);
+    const deployment = await deployToScheduler(userToken, {
+      appId,
+      requestKey,
+      target,
+      image,
+      containerPort,
+    });
+    const endpoint = deployment.endpoint;
+    if (!endpoint) throw new RemoteNodeError('Deployment is running but returned no endpoint', 502);
+    const url = `${endpoint.replace(/\/+$/, '')}${mcpPath.startsWith('/') ? mcpPath : `/${mcpPath}`}`;
+
+    // Lazy import: mcpService pulls the openid-client dependency chain, which
+    // some jest environments cannot parse at module load.
+    const { addServer } = await import('../services/mcpService.js');
+    await addServer(name, {
+      type: 'streamable-http',
+      url,
+      description: `Deployed via V-Scheduler onto node '${node.name}' (${deployment.profile})`,
+      nodeId: node.id,
+      nodeName: node.name,
+      nodeProfile: node.profile,
+      deploymentId: deployment.id,
+      ...(visibility ? { visibility } : {}),
+    });
+
+    audit(req, 'node-ops.deploy', { nodeId: node.id, nodeName: node.name, image, endpoint });
+    logger.info('[deploy] MCP server deployed and registered', {
+      node: node.name,
+      name,
+      endpoint,
+      url,
+    });
+    res.json({
+      success: true,
+      data: { name, endpoint, url, deploymentId: deployment.id, state: deployment.state },
+    });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+/** Shared context for lifecycle actions on a deployed server: the whitelist
+ * node, the caller's scheduler token and the deployment id recorded on the
+ * server config at deploy time. */
+const resolveDeploymentContext = async (req: Request): Promise<{
+  userToken: string;
+  serverName: string;
+  deploymentId: string;
+  node: RemoteNodeConfig;
+}> => {
+  const node = getRemoteNodeInternal(req.params.id);
+  const userToken = vosTokenFromRequest(req);
+  if (!userToken) throw new RemoteNodeError('VOS user token is required', 401);
+  const serverName = String(req.params.name ?? '');
+  const { getServerDao } = await import('../dao/DaoFactory.js');
+  const config = await getServerDao().findById(serverName);
+  if (!config) throw new RemoteNodeError(`Server '${serverName}' not found`, 404);
+  if (config.nodeId !== node.id) {
+    throw new RemoteNodeError(`Server '${serverName}' is not registered under node '${node.name}'`, 400);
+  }
+  if (!config.deploymentId) {
+    throw new RemoteNodeError(
+      `Server '${serverName}' has no deployment id: it was not deployed via V-Scheduler`,
+      400,
+    );
+  }
+  return { userToken, serverName, deploymentId: config.deploymentId, node };
+};
+
+/** Pauses a deployed server: stops the container on the node and disables the
+ * local upstream, so the tool disappears from users until started again. */
+export const stopDeployedServer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userToken, serverName, deploymentId, node } = await resolveDeploymentContext(req);
+    await setDeploymentState(userToken, deploymentId, 'stop');
+    const { toggleServerStatus } = await import('../services/mcpService.js');
+    await toggleServerStatus(serverName, false);
+    audit(req, 'node-ops.deploy-stop', { nodeId: node.id, serverName, deploymentId });
+    res.json({ success: true, data: { name: serverName, state: 'stopped' } });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+/** Resumes a paused server: starts the container and re-enables the upstream. */
+export const startDeployedServer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userToken, serverName, deploymentId, node } = await resolveDeploymentContext(req);
+    await setDeploymentState(userToken, deploymentId, 'start');
+    const { toggleServerStatus } = await import('../services/mcpService.js');
+    await toggleServerStatus(serverName, true);
+    audit(req, 'node-ops.deploy-start', { nodeId: node.id, serverName, deploymentId });
+    res.json({ success: true, data: { name: serverName, state: 'running' } });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
+/** Removes the deployment entirely (container deleted on the node) and drops
+ * the local server record. */
+export const undeployNodeServer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userToken, serverName, deploymentId, node } = await resolveDeploymentContext(req);
+    await removeDeployment(userToken, deploymentId);
+    const { removeServer } = await import('../services/mcpService.js');
+    await removeServer(serverName);
+    audit(req, 'node-ops.undeploy', { nodeId: node.id, serverName, deploymentId });
+    res.json({ success: true, data: { name: serverName, undeployed: true } });
+  } catch (error) {
+    fail(res, error);
   }
 };

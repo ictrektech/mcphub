@@ -34,7 +34,7 @@ export type RemoteNodeView = RemoteNodeConfig;
 // V-Scheduler discovery configuration (server-side only).
 // The unified container exposes the controller at 38120 and the gateway at 8080;
 // /scheduler/api/v1 works on both, so use one path for every deployment.
-const SCHEDULER_URL = (
+export const SCHEDULER_URL = (
   process.env.V_SCHEDULER_URL
   || process.env.MCPHUB_VSCHEDULER_URL
   || 'http://v-scheduler:8080'
@@ -141,7 +141,9 @@ export const discoverNodesFromScheduler = async (userToken: string): Promise<Dis
   return items
     .map((item): DiscoveredNodeView | null => {
       // Submitter credentials receive `address`/`hostname`; admin tokens also carry `host`.
-      const address = [item?.address, item?.hostname, item?.host]
+      // Prefer the scheduler's `host` (a dialable IP) over hostname aliases:
+      // registering `address: "ubuntu"` breaks later deploy/dial steps.
+      const address = [item?.host, item?.address, item?.hostname]
         .find((value) => typeof value === 'string' && value.trim())
         ?.trim();
       if (!address) return null;
