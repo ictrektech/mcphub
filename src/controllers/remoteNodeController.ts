@@ -710,8 +710,8 @@ export const pairRemoteNode = async (req: Request, res: Response): Promise<void>
  * auth is the deploy-time channel credential. Admin only.
  *
  * Body: { name, image, containerPort?, mcpPath?, visibility? }
- * The deployment is idempotent per (node, name): re-invoking with the same
- * payload returns the existing deployment instead of redeploying. */
+ * Deploying again replaces the previous deployment (old container removed,
+ * fresh one created with a new request key). */
 export const deployNodeServer = async (req: Request, res: Response): Promise<void> => {
   try {
     const node = getRemoteNodeInternal(req.params.id);
@@ -749,7 +749,30 @@ export const deployNodeServer = async (req: Request, res: Response): Promise<voi
     const target = { kind: 'ssh' as const, id: node.schedulerNodeId, profile };
     const appId = 'com.ictrek.mcphub';
     const repository = imageRepositoryOf(image);
-    const requestKey = `mcphub-${node.id}-${name}`.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64);
+
+    // Deploying again replaces the previous deployment: drop the old container
+    // first so changed image/port take effect, and use a fresh request key per
+    // call — the scheduler answers a repeated key with different parameters
+    // with 409 instead of redeploying.
+    const { getServerDao } = await import('../dao/DaoFactory.js');
+    const existing = await getServerDao().findById(name);
+    if (existing?.deploymentId && existing.nodeId === node.id) {
+      try {
+        await removeDeployment(userToken, existing.deploymentId);
+        logger.info('[deploy] previous deployment removed for re-deploy', {
+          name,
+          deploymentId: existing.deploymentId,
+        });
+      } catch (error) {
+        logger.warn('[deploy] previous deployment removal failed; continuing', {
+          name,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const requestKey = `mcphub-${node.id}-${name}-${Date.now().toString(36)}`
+      .replace(/[^A-Za-z0-9._-]/g, '-')
+      .slice(0, 64);
 
     await ensureDeploymentAccess(userToken, appId, target, repository);
     const deployment = await deployToScheduler(userToken, {
@@ -774,6 +797,11 @@ export const deployNodeServer = async (req: Request, res: Response): Promise<voi
       nodeName: node.name,
       nodeProfile: node.profile,
       deploymentId: deployment.id,
+      // The upstream IS the node we just deployed to: allow the SSRF guard to
+      // reach it by adding the node's address to the server's CIDR allowlist.
+      network: {
+        allowedCidrs: [ ...(node.address?.trim() ? [`${node.address.trim()}/32`] : []) ],
+      },
       ...(visibility ? { visibility } : {}),
     });
 
