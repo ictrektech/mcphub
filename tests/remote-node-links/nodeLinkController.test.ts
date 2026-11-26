@@ -31,7 +31,12 @@ jest.mock('node:https', () => ({
   default: { request: (...args: unknown[]) => httpsRequest(...args) },
 }));
 
-jest.mock('node:fs', () => ({ readFileSync: () => Buffer.from('cert') }));
+jest.mock('node:fs', () => ({
+  readFileSync: () => Buffer.from('cert'),
+  // credentialsFor probes the per-peer bundle dir first; report absent so the
+  // env-provided certificate candidates are used.
+  existsSync: () => false,
+}));
 
 jest.mock('../../src/services/nodeCredentialStore.js', () => ({
   resolveDataPlaneToken: (...args: unknown[]) => resolveDataPlaneToken(...args),
