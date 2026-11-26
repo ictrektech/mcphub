@@ -52,6 +52,13 @@ interface NodeLinkServer {
   attached: boolean;
 }
 
+interface DeployedServer {
+  name: string;
+  url: string | null;
+  enabled: boolean;
+  deploymentId: string | null;
+}
+
 interface ApiResult<T> {
   success: boolean;
   data?: T;
@@ -62,6 +69,8 @@ const emptyForm = {
   id: '', name: '', address: '', hostname: '', arch: '', gpuModel: '', profile: '', enabled: true,
   dataPlaneToken: '',
 };
+
+const emptyDeployForm = { name: '', image: '', port: '3000', public: false };
 
 const RemoteNodesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -82,6 +91,10 @@ const RemoteNodesPage: React.FC = () => {
   const [peerLoading, setPeerLoading] = useState<Record<string, boolean>>({});
   const [pairing, setPairing] = useState<Record<string, boolean>>({});
   const [credentialConfigured, setCredentialConfigured] = useState(false);
+  const [deployed, setDeployed] = useState<Record<string, DeployedServer[]>>({});
+  const [deployForm, setDeployForm] = useState<Record<string, { name: string; image: string; port: string; public: boolean }>>({});
+  const [deploying, setDeploying] = useState<Record<string, boolean>>({});
+  const [lifecycleLoading, setLifecycleLoading] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,13 +141,74 @@ const RemoteNodesPage: React.FC = () => {
     setCredentialConfigured(Boolean(result.success && result.data?.configured));
   }, []);
 
+  const loadDeployed = useCallback(async (nodeId: string) => {
+    const result = await apiGet<ApiResult<DeployedServer[]>>(
+      `/remote-nodes/${encodeURIComponent(nodeId)}/deployed`,
+    );
+    if (result.success && result.data) {
+      setDeployed((current) => ({ ...current, [nodeId]: result.data! }));
+    }
+  }, []);
+
   const toggleExpanded = (nodeId: string) => {
     const next = !expanded[nodeId];
     setExpanded((current) => ({ ...current, [nodeId]: next }));
     if (next) {
       void loadServers(nodeId);
       void loadPeerServers(nodeId);
+      void loadDeployed(nodeId);
     }
+  };
+
+  const deployService = async (node: RemoteNode) => {
+    const entry = deployForm[node.id] ?? { ...emptyDeployForm };
+    if (!entry.name.trim() || !entry.image.trim()) {
+      setError(t('remoteNodes.deployFieldsRequired'));
+      return;
+    }
+    setDeploying((current) => ({ ...current, [node.id]: true }));
+    setError('');
+    setNotice('');
+    const result = await apiPost<ApiResult<{ name: string; endpoint: string; url: string }>>(
+      `/remote-nodes/${encodeURIComponent(node.id)}/deploy`,
+      {
+        name: entry.name.trim(),
+        image: entry.image.trim(),
+        containerPort: Number(entry.port) || 3000,
+        ...(entry.public ? { visibility: 'public' } : {}),
+      },
+    );
+    if (result.success) {
+      setNotice(t('remoteNodes.deploySuccess', { endpoint: result.data?.endpoint ?? '' }));
+      setDeployForm((current) => ({ ...current, [node.id]: { ...emptyDeployForm } }));
+      await loadDeployed(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.deployFailed'));
+    }
+    setDeploying((current) => ({ ...current, [node.id]: false }));
+  };
+
+  const lifecycleAction = async (
+    node: RemoteNode,
+    server: DeployedServer,
+    action: 'stop' | 'start' | 'undeploy',
+  ) => {
+    if (action === 'undeploy' && !window.confirm(t('remoteNodes.confirmUndeploy', { name: server.name }))) return;
+    const key = `${node.id}:${server.name}`;
+    setLifecycleLoading((current) => ({ ...current, [key]: action }));
+    setError('');
+    setNotice('');
+    const result = await apiPost<ApiResult<unknown>>(
+      `/remote-nodes/${encodeURIComponent(node.id)}/servers/${encodeURIComponent(server.name)}/${action}`,
+      {},
+    );
+    if (result.success) {
+      setNotice(t(`remoteNodes.${action}Notice`));
+      await loadDeployed(node.id);
+    } else {
+      setError(result.message ?? t('remoteNodes.lifecycleFailed'));
+    }
+    setLifecycleLoading((current) => ({ ...current, [key]: '' }));
   };
 
   if (!auth.user?.isAdmin) {
@@ -483,6 +557,90 @@ const RemoteNodesPage: React.FC = () => {
                           <button className="hub-btn sm flex-shrink-0" onClick={() => void togglePeerServer(node, peer)}>
                             {peer.attached ? t('remoteNodes.detach') : t('remoteNodes.attach')}
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <h3 className="text-[13px] font-medium mb-2 mt-4">{t('remoteNodes.deployTitle')}</h3>
+                  <p className="hub-sub mb-2">{t('remoteNodes.deployHint')}</p>
+                  <div className="flex flex-wrap items-end gap-2 mb-3">
+                    <input
+                      className="hub-input w-44"
+                      placeholder={t('remoteNodes.deployName')}
+                      value={(deployForm[node.id] ?? emptyDeployForm).name}
+                      onChange={(event) => setDeployForm((current) => ({
+                        ...current,
+                        [node.id]: { ...(current[node.id] ?? emptyDeployForm), name: event.target.value },
+                      }))}
+                    />
+                    <input
+                      className="hub-input flex-1 min-w-[220px]"
+                      placeholder={t('remoteNodes.deployImage')}
+                      value={(deployForm[node.id] ?? emptyDeployForm).image}
+                      onChange={(event) => setDeployForm((current) => ({
+                        ...current,
+                        [node.id]: { ...(current[node.id] ?? emptyDeployForm), image: event.target.value },
+                      }))}
+                    />
+                    <input
+                      className="hub-input w-20"
+                      value={(deployForm[node.id] ?? emptyDeployForm).port}
+                      onChange={(event) => setDeployForm((current) => ({
+                        ...current,
+                        [node.id]: { ...(current[node.id] ?? emptyDeployForm), port: event.target.value },
+                      }))}
+                    />
+                    <label className="flex items-center gap-1 text-[12px]">
+                      <input
+                        type="checkbox"
+                        checked={(deployForm[node.id] ?? emptyDeployForm).public}
+                        onChange={(event) => setDeployForm((current) => ({
+                          ...current,
+                          [node.id]: { ...(current[node.id] ?? emptyDeployForm), public: event.target.checked },
+                        }))}
+                      />
+                      {t('remoteNodes.deployPublic')}
+                    </label>
+                    <button
+                      className="hub-btn primary sm"
+                      disabled={deploying[node.id]}
+                      onClick={() => void deployService(node)}
+                    >
+                      {deploying[node.id] ? t('remoteNodes.deploying') : t('remoteNodes.deploy')}
+                    </button>
+                  </div>
+                  {(deployed[node.id] ?? []).length === 0 ? (
+                    <p className="hub-sub mb-3">{t('remoteNodes.deployedEmpty')}</p>
+                  ) : (
+                    <div className="flex flex-col gap-2 mb-3">
+                      {(deployed[node.id] ?? []).map((server) => (
+                        <div key={server.name} className="flex items-center justify-between gap-2 text-[12px]">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{server.name}</div>
+                            <div className="hub-sub truncate" title={server.url ?? ''}>{server.url ?? '-'}</div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              <span className="hub-badge">
+                                {server.enabled ? t('remoteNodes.deployedEnabled') : t('remoteNodes.deployedPaused')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              className="hub-btn sm"
+                              disabled={lifecycleLoading[`${node.id}:${server.name}`] === 'stop' || lifecycleLoading[`${node.id}:${server.name}`] === 'start'}
+                              onClick={() => void lifecycleAction(node, server, server.enabled ? 'stop' : 'start')}
+                            >
+                              {server.enabled ? t('remoteNodes.pause') : t('remoteNodes.resume')}
+                            </button>
+                            <button
+                              className="hub-btn sm"
+                              disabled={lifecycleLoading[`${node.id}:${server.name}`] === 'undeploy'}
+                              onClick={() => void lifecycleAction(node, server, 'undeploy')}
+                            >
+                              {t('remoteNodes.undeploy')}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

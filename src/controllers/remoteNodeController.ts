@@ -821,6 +821,28 @@ const resolveDeploymentContext = async (req: Request): Promise<{
   return { userToken, serverName, deploymentId: config.deploymentId, node };
 };
 
+/** Lists the MCP servers that were deployed onto this node via MCPHub
+ * (config-level view: name/endpoint/enabled/deploymentId). */
+export const listDeployedServers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const node = getRemoteNodeInternal(req.params.id);
+    const { getServerDao } = await import('../dao/DaoFactory.js');
+    const all = await getServerDao().findAll();
+    const items = all
+      .filter((server) => server.nodeId === node.id)
+      .map((server) => ({
+        name: server.name,
+        url: server.url ?? null,
+        enabled: server.enabled !== false,
+        deploymentId: server.deploymentId ?? null,
+        visibility: server.visibility ?? null,
+      }));
+    res.json({ success: true, data: items });
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
 /** Pauses a deployed server: stops the container on the node and disables the
  * local upstream, so the tool disappears from users until started again. */
 export const stopDeployedServer = async (req: Request, res: Response): Promise<void> => {

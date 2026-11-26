@@ -207,6 +207,7 @@ import {
   deleteNodeCredential,
   deployNodeServer,
   discoverFromScheduler,
+  listDeployedServers,
   startDeployedServer,
   stopDeployedServer,
   undeployNodeServer,
@@ -337,6 +338,11 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   // §P2 部署: launch an MCP server container on the node via V-Scheduler and
   // register the running endpoint as a managed streamable-http upstream.
   authenticatedRouter.post('/remote-nodes/:id/deploy', requireAdminMiddleware, deployNodeServer);
+  authenticatedRouter.get(
+    '/remote-nodes/:id/deployed',
+    requireAdminMiddleware,
+    listDeployedServers,
+  );
   // §P2 生命周期: pause/resume the deployed container (and toggle the local
   // upstream accordingly), or remove the deployment entirely.
   authenticatedRouter.post(
