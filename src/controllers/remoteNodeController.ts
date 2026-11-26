@@ -626,7 +626,7 @@ const peerHttpPort = (): number =>
 /** A side: one-click pairing for a registered node (admin only). */
 export const pairRemoteNode = async (req: Request, res: Response): Promise<void> => {
   try {
-    const node = getRemoteNodeInternal(req.params.nodeId);
+    const node = getRemoteNodeInternal(req.params.id);
     const host = String(req.body?.address ?? node.address ?? node.hostname ?? '').trim();
     if (!host) throw new RemoteNodeError(`Node '${node.name}' has no address`, 400);
     const port = peerHttpPort();
