@@ -319,6 +319,13 @@ const fetchPeerServers = async (node: RemoteNodeConfig): Promise<NodeOpsServerSu
         cert: credentials.cert,
         key: credentials.key,
         ca: credentials.ca,
+        // CA-pinned trust: the pairing exchange delivered this CA directly from
+        // the peer, so the chain is the identity. Hostname checking is skipped
+        // because bootstrapped certs cannot know the host's LAN/NAT addresses
+        // (a container sees bridge IPs only), which made dialing by LAN IP
+        // fail with ERR_TLS_CERT_ALTNAME_INVALID.
+        rejectUnauthorized: true,
+        checkServerIdentity: () => undefined,
         headers: { Authorization: `Bearer ${credentials.token}`, Accept: 'application/json' },
         timeout: 5000,
       },
