@@ -83,8 +83,12 @@ jobs:
       - name: Publish VOS App Store package
         run: |
           set -euo pipefail
+          # `channel=stable` is what promotes the upload to `current_version`.
+          # Without it the store files the version under `rolling` and the
+          # publish check below (correctly) rejects the release.
           curl --fail --silent --show-error --max-time 300 \
             -F "package=@$MCPHUB_PACKAGE_DIR/mcphub_${PACKAGE_VERSION}_pull.tar" -F force=true \
+            -F "channel=stable" \
             http://127.0.0.1:18899/api/appstore/apps > "$HOME/dev/build/mcphub/publish-result.json"
           python3 - <<'PY'
           import json, os, pathlib, re, time, urllib.request
@@ -116,6 +120,20 @@ jobs:
                               break
               return names
 
+          def release_channels(detail):
+              """version -> channel. The upload only becomes installable once the
+              store records it on the `stable` channel; `rolling` is just an
+              archived artefact."""
+              channels = {}
+              for entry in detail.get('releases') or []:
+                  if not isinstance(entry, dict):
+                      continue
+                  name = next((entry[key] for key in ('version', 'tag', 'name')
+                               if isinstance(entry.get(key), str)), None)
+                  if name is not None:
+                      channels[name] = entry.get('channel')
+              return channels
+
           def archive_head(path):
               request = urllib.request.Request(f'{BASE}/store/{path}', headers={'Range': 'bytes=0-1'})
               with urllib.request.urlopen(request, timeout=30) as response:
@@ -132,10 +150,11 @@ jobs:
               return (tuple(parts), int(match.group(2)))
 
           def problems_of(record):
-              """Success means: the version is in the catalog, its archive downloads,
-              and - unless this is a deliberate rollback to an older version - the
-              catalog actually promotes it. A newer release that stays behind an
-              older `current_version` is a broken publish, not a rounding error."""
+              """Success means: the version is in the catalog on the `stable`
+              channel, its archive downloads, and - unless this is a deliberate
+              rollback to an older version - the catalog actually promotes it. A
+              newer release that stays behind an older `current_version` is a
+              broken publish, not a rounding error."""
               detail = record.get('data') or {}
               archive = detail.get('app_tar_gz') or {}
               current = detail.get('current_version')
@@ -147,6 +166,15 @@ jobs:
               names = version_names(detail)
               if VERSION not in names:
                   found.append(f"version {VERSION!r} missing from versions={names!r}")
+              channels = release_channels(detail)
+              if channels:
+                  channel = channels.get(VERSION)
+                  if channel is None:
+                      found.append(f"version {VERSION!r} missing from releases")
+                  elif channel != 'stable':
+                      found.append(
+                          f"channel={channel!r} for {VERSION!r}, expected 'stable': the upload "
+                          f'did not land on the stable channel')
               path = archive.get('download_path') or DEFAULT_ARCHIVE
               if VERSION not in path:
                   found.append(f"download_path={path!r} does not point at {VERSION!r}")
