@@ -72,27 +72,27 @@ x-mcphub-gpu: &mcphub-gpu
 services:
   mcphub-amd-without-cuda:
     <<: *mcphub-base
-    profiles: ['amd-without-cuda']
+    profiles: ['amd-cpu']
     image: ${MCPHUB_AMD_WITHOUT_CUDA_IMAGE}
   mcphub-arm-without-cuda:
     <<: *mcphub-base
-    profiles: ['arm-without-cuda']
+    profiles: ['arm-cpu']
     image: ${MCPHUB_ARM_WITHOUT_CUDA_IMAGE}
   mcphub-amd:
     <<: *mcphub-gpu
-    profiles: ['amd']
+    profiles: ['amd-cuda']
     image: ${MCPHUB_AMD_IMAGE}
   mcphub-arm:
     <<: *mcphub-gpu
-    profiles: ['arm']
+    profiles: ['arm-cuda']
     image: ${MCPHUB_ARM_IMAGE}
   mcphub-l4t:
     <<: *mcphub-gpu
-    profiles: ['l4t']
+    profiles: ['jetson-orin']
     image: ${MCPHUB_L4T_IMAGE}
   mcphub-thor-spark:
     <<: *mcphub-gpu
-    profiles: ['thor-spark']
+    profiles: ['jetson-thor', 'dgx-spark']
     image: ${MCPHUB_THOR_SPARK_IMAGE}
 
 networks:

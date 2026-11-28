@@ -1,5 +1,7 @@
 # MCPHub __APP_VERSION__
 
+Keep app storage when upgrading and explicitly select the matching canonical Profile. `amd` → `amd-cuda`, `amd-without-cuda` → `amd-cpu`, `arm` → `arm-cuda`, `arm-without-cuda` → `arm-cpu`, `l4t` → `jetson-orin`, `thor-spark` → `jetson-thor`. On a device that reports DGX Spark, select `dgx-spark` for the old `thor-spark`. Provide the new `profiles` explicitly for API upgrades. Select the matching old Profile on rollback. Application APIs stay the same.
+
 Open MCPHub from the VOS app drawer to sign in with your platform account. Administrators manage trusted local stdio servers; users may add remote MCPs and use shared services.
 
 Servers default to private. Public servers require authentication; use explicit user/group sharing for narrower access. Sharing usage does not disclose upstream configuration or credentials. For external clients, create a user-level MCPHub bearer key and use `/app/com.ictrek.mcphub/mcp` on the VOS HTTPS origin. Revoke MCPHub keys explicitly when offboarding a VOS user.
