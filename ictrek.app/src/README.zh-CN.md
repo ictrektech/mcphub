@@ -1,5 +1,7 @@
 # MCPHub __APP_VERSION__
 
+从旧版升级时保留原存储，并显式选择原后端对应的标准 Profile。`amd` → `amd-cuda`、`amd-without-cuda` → `amd-cpu`、`arm` → `arm-cuda`、`arm-without-cuda` → `arm-cpu`、`l4t` → `jetson-orin`、`thor-spark` → `jetson-thor`。 旧 `thor-spark` 在已报告 Spark 设备标识的节点上可选 `dgx-spark`。 API 升级显式传入新 `profiles`，回退时选回旧版本对应选项。应用 API 保持一致。
+
 从 VOS 应用抽屉打开 MCPHub，自动使用平台账户登录。管理员部署可信的本地 stdio 服务；普通用户可添加远程 MCP，并使用获共享的服务。
 
 新服务默认私有。公开服务仍要求认证；也可只共享给指定用户或组。共享调用权限不会开放上游配置和密钥。外部客户端请创建用户级 MCPHub Bearer Key，并连接 VOS HTTPS 地址下的 `/app/com.ictrek.mcphub/mcp`。停用 VOS 用户后，还需显式撤销其已签发的 MCPHub Key。

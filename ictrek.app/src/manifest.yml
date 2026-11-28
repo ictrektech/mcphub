@@ -36,7 +36,7 @@ oauth2:
     token_endpoint_auth_method: none
 require-profiles: true
 profiles:
-  - name: amd-without-cuda
+  - name: amd-cpu
     title:
       zh-CN: AMD64 CPU（推荐）
       en: amd-without-cuda
@@ -47,12 +47,13 @@ profiles:
     caps:
       arch: amd64
     conflicts:
-      - arm-without-cuda
-      - amd
-      - arm
-      - l4t
-      - thor-spark
-  - name: arm-without-cuda
+      - arm-cpu
+      - amd-cuda
+      - arm-cuda
+      - jetson-orin
+      - jetson-thor
+      - dgx-spark
+  - name: arm-cpu
     title:
       zh-CN: ARM64 CPU（推荐，含 Jetson/Thor）
       en: arm-without-cuda
@@ -63,12 +64,13 @@ profiles:
     caps:
       arch: arm64
     conflicts:
-      - amd-without-cuda
-      - amd
-      - arm
-      - l4t
-      - thor-spark
-  - name: amd
+      - amd-cpu
+      - amd-cuda
+      - arm-cuda
+      - jetson-orin
+      - jetson-thor
+      - dgx-spark
+  - name: amd-cuda
     title:
       zh-CN: AMD64 NVIDIA（可选）
       en: amd
@@ -81,12 +83,13 @@ profiles:
       software:
         - cuda
     conflicts:
-      - amd-without-cuda
-      - arm-without-cuda
-      - arm
-      - l4t
-      - thor-spark
-  - name: arm
+      - amd-cpu
+      - arm-cpu
+      - arm-cuda
+      - jetson-orin
+      - jetson-thor
+      - dgx-spark
+  - name: arm-cuda
     title:
       zh-CN: ARM64 NVIDIA（可选）
       en: arm
@@ -100,12 +103,13 @@ profiles:
         - cuda
       device-type: generic
     conflicts:
-      - amd-without-cuda
-      - arm-without-cuda
-      - amd
-      - l4t
-      - thor-spark
-  - name: l4t
+      - amd-cpu
+      - arm-cpu
+      - amd-cuda
+      - jetson-orin
+      - jetson-thor
+      - dgx-spark
+  - name: jetson-orin
     title:
       zh-CN: Jetson / L4T NVIDIA（可选）
       en: l4t
@@ -119,18 +123,20 @@ profiles:
         - cuda
       device-type:
         - any-of:
+            - jetson-orin
             - l4t
             - jetson
     conflicts:
-      - amd-without-cuda
-      - arm-without-cuda
-      - amd
-      - arm
-      - thor-spark
-  - name: thor-spark
+      - amd-cpu
+      - arm-cpu
+      - amd-cuda
+      - arm-cuda
+      - jetson-thor
+      - dgx-spark
+  - name: jetson-thor
     title:
-      zh-CN: Thor / Spark NVIDIA（可选）
-      en: thor-spark
+      zh-CN: Jetson Thor NVIDIA（可选）
+      en: Jetson Thor
     description:
       zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
       en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
@@ -141,14 +147,40 @@ profiles:
         - cuda
       device-type:
         - any-of:
-            - thor-spark
+            - jetson-thor
             - thor
+            - thor-spark
     conflicts:
-      - amd-without-cuda
-      - arm-without-cuda
-      - amd
-      - arm
-      - l4t
+      - amd-cpu
+      - arm-cpu
+      - amd-cuda
+      - arm-cuda
+      - jetson-orin
+      - dgx-spark
+  - name: dgx-spark
+    title:
+      zh-CN: DGX Spark NVIDIA（可选）
+      en: DGX Spark
+    description:
+      zh-CN: 管理与远程 MCP 无需 GPU。NVIDIA profile 仅暴露 GPU 驱动，服务自身需另配匹配的 CUDA 依赖。
+      en: Management and remote MCP need no GPU. NVIDIA profiles expose drivers only;
+        local GPU servers need compatible CUDA dependencies.
+    caps:
+      arch: arm64
+      software:
+        - cuda
+      device-type:
+        - any-of:
+            - dgx-spark
+            - spark
+    conflicts:
+      - amd-cpu
+      - arm-cpu
+      - amd-cuda
+      - arm-cuda
+      - jetson-orin
+      - jetson-thor
+
 storage:
   directories:
     - path: data
