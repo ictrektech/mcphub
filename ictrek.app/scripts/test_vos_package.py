@@ -24,7 +24,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual({p['name'] for p in manifest['profiles']},
                              {p for s in compose['services'].values() for p in s['profiles']})
             for service in compose['services'].values():
-                cpu = service['profiles'][0].endswith('without-cuda')
+                cpu = all(profile.endswith('-cpu') for profile in service['profiles'])
                 self.assertEqual(service.get('runtime'), None if cpu else 'nvidia')
                 self.assertNotIn('privileged', service)
                 self.assertTrue(all('docker.sock' not in volume for volume in service['volumes']))
